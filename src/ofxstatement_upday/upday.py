@@ -450,6 +450,15 @@ def _extract_table_html(driver) -> str:
 def _go_to_next_page(driver) -> bool:
     """Controlla se esiste una pagina successiva e ci naviga"""
     try:
+        # Salva il numero della pagina corrente prima di fare qualsiasi operazione
+        current_page_number = None
+        try:
+            current_active = driver.find_element(By.CSS_SELECTOR, "#pg_page li.item.active a")
+            current_page_number = current_active.text.strip()
+            print(f"Pagina corrente: {current_page_number}")
+        except:
+            print("⚠️  Non riesco a determinare la pagina corrente")
+
         # Cerca la paginazione con id pg_page
         pagination = driver.find_element(By.ID, "pg_page")
 
@@ -457,6 +466,7 @@ def _go_to_next_page(driver) -> bool:
         items = pagination.find_elements(By.CSS_SELECTOR, "li.item")
 
         if not items:
+            print("Nessun elemento di paginazione trovato")
             return False
 
         # Trova l'elemento attivo
@@ -468,8 +478,10 @@ def _go_to_next_page(driver) -> bool:
                 active_item = item
                 active_index = i
                 break
+
         if active_item is None:
-            _handle_fatal_error(driver, "Elemento di paginazione attivo non trovato")
+            print("⚠️  Elemento di paginazione attivo non trovato")
+            return False
 
         # Controlla se esiste un elemento successivo
         if active_index + 1 < len(items):
@@ -479,25 +491,94 @@ def _go_to_next_page(driver) -> bool:
             try:
                 next_link = next_item.find_element(By.TAG_NAME, "a")
                 next_page_number_text = next_link.text.strip()
-                print(f"Navigazione alla pagina successiva: {next_page_number_text}")
-                next_link.click()
+                next_page_url = next_link.get_attribute('href')
 
-                # Attendi che la pagina si ricarichi, verificando la pagina attiva
+                print(f"Navigazione alla pagina successiva: {next_page_number_text}")
+
+                # Strategia 1: Prova con il click normale
                 try:
-                    WebDriverWait(driver, 10).until(lambda d: d.find_element(By.CSS_SELECTOR, "#pg_page li.item.active a").text.strip() == next_page_number_text)
-                except Exception as e:
-                    _handle_fatal_error(driver, "La pagina successiva non si è caricata correttamente", e)
+                    next_link.click()
+                except Exception as click_e:
+                    print(f"Click normale fallito: {click_e}")
+                    # Strategia 2: Usa JavaScript per il click
+                    try:
+                        driver.execute_script("arguments[0].click();", next_link)
+                        print("Click JavaScript riuscito")
+                    except Exception as js_e:
+                        print(f"Click JavaScript fallito: {js_e}")
+                        # Strategia 3: Naviga direttamente con l'URL
+                        if next_page_url:
+                            print(f"Navigazione diretta all'URL: {next_page_url}")
+                            driver.get(next_page_url)
+                        else:
+                            print("❌ Tutte le strategie di click fallite")
+                            return False
+
+                # Attendi che la pagina si carichi con una strategia più robusta
+                print("⏳ Attendo il caricamento della pagina successiva...")
+
+                # Strategia di attesa più robusta
+                max_attempts = 3
+                for attempt in range(max_attempts):
+                    try:
+                        # Aspetta che la tabella sia presente (indica che la pagina è caricata)
+                        WebDriverWait(driver, 5).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, ".wrap-table table.table tbody"))
+                        )
+
+                        # Verifica che la paginazione sia nuovamente disponibile
+                        WebDriverWait(driver, 3).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "#pg_page li.item.active"))
+                        )
+
+                        # Verifica che la pagina sia effettivamente cambiata
+                        try:
+                            new_active = driver.find_element(By.CSS_SELECTOR, "#pg_page li.item.active a")
+                            new_page_number = new_active.text.strip()
+
+                            if new_page_number == next_page_number_text:
+                                print(f"✅ Navigazione riuscita alla pagina {new_page_number}")
+                                return True
+                            elif new_page_number != current_page_number:
+                                print(f"✅ Pagina cambiata da {current_page_number} a {new_page_number}")
+                                return True
+                            else:
+                                print(f"⚠️  Tentativo {attempt + 1}: Pagina non cambiata, riprovo...")
+                                if attempt < max_attempts - 1:
+                                    import time
+                                    time.sleep(1)
+                                    continue
+
+                        except Exception as verify_e:
+                            print(f"⚠️  Tentativo {attempt + 1}: Errore nella verifica: {verify_e}")
+                            if attempt < max_attempts - 1:
+                                import time
+                                time.sleep(1)
+                                continue
+
+                        break
+
+                    except Exception as wait_e:
+                        print(f"⚠️  Tentativo {attempt + 1}: Timeout nell'attesa: {wait_e}")
+                        if attempt < max_attempts - 1:
+                            import time
+                            time.sleep(2)
+                            continue
+                        else:
+                            print("❌ Timeout definitivo nel caricamento della pagina")
+                            return False
+
                 return True
 
             except Exception as e:
-                print("Link alla pagina successiva non trovato")
+                print(f"⚠️  Errore nella ricerca del link successivo: {e}")
                 return False
         else:
-            print("Nessuna pagina successiva disponibile")
+            print("✅ Nessuna pagina successiva disponibile (fine paginazione)")
             return False
 
     except Exception as e:
-        print(f"Errore nella navigazione alla pagina successiva: {e}")
+        print(f"❌ Errore generale nella navigazione alla pagina successiva: {e}")
         return False
 
 
