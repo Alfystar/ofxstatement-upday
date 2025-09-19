@@ -1,7 +1,7 @@
 import re
 import csv
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 from typing import Iterable, List, Dict, Any
 
@@ -16,6 +16,50 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
+
+
+# ============================================================================
+# DATE VALIDATION FUNCTIONS
+# ============================================================================
+
+def _validate_start_date(start_date: str) -> bool:
+    """
+    Valida che la data di inizio non sia antecedente a 1 anno fa
+
+    Args:
+        start_date: Data di inizio nel formato gg/mm/aaaa
+
+    Returns:
+        True se la data è valida, False altrimenti
+    """
+    try:
+        # Parse della data di inizio
+        start_dt = datetime.strptime(start_date, "%d/%m/%Y").date()
+
+        # Calcola la data limite (1 anno fa da oggi) - solo la data, non l'ora
+        one_year_ago = (datetime.now() - timedelta(days=365)).date()
+
+        # Verifica se la data di inizio è troppo vecchia
+        if start_dt < one_year_ago:
+            print("\n" + "=" * 70)
+            print("❌ ERRORE: DATA DI INIZIO NON VALIDA")
+            print("=" * 70)
+            print(f"🚫 Data inserita: {start_date}")
+            print(f"📅 Data limite del sito: {one_year_ago.strftime('%d/%m/%Y')}")
+            print(f"⚠️  Il sito UpDay non permette di accedere a dati antecedenti a 1 anno fa.")
+            print(f"✅ La prima data ammissibile è: {one_year_ago.strftime('%d/%m/%Y')}")
+            print("\n💡 Suggerimento: Inserisci una data di inizio più recente.")
+            print("=" * 70)
+            return False
+
+        return True
+
+    except ValueError:
+        print(f"❌ Errore nel parsing della data: {start_date}")
+        return False
+    except Exception as e:
+        print(f"❌ Errore nella validazione della data: {e}")
+        return False
 
 
 # ============================================================================
@@ -42,11 +86,23 @@ def _get_date_from_user(info: str = "inizio", optional: bool = False) -> str:
             try:
                 parsed_date = datetime.strptime(date_input, fmt)
                 # Converte nel formato richiesto dal sito (gg/mm/aaaa)
-                return parsed_date.strftime("%d/%m/%Y")
+                formatted_date = parsed_date.strftime("%d/%m/%Y")
+
+                # Valida la data solo per la data di inizio (non opzionale)
+                if not optional and not _validate_start_date(formatted_date):
+                    break  # Esci dal loop dei formati e richiedi una nuova data
+
+                return formatted_date
             except ValueError:
                 continue
 
-        print("Formato data non valido. Riprova con formato gg/mm/aaaa")
+        # Se arriviamo qui, o il formato non è valido o la data non è ammissibile
+        if not optional:
+            # Per la data di inizio, mostra un messaggio più specifico
+            one_year_ago = datetime.now() - timedelta(days=365)
+            print(f"⚠️  Inserisci una data valida non antecedente al {one_year_ago.strftime('%d/%m/%Y')}")
+        else:
+            print("Formato data non valido. Riprova con formato gg/mm/aaaa")
 
 
 def _setup_browser():
