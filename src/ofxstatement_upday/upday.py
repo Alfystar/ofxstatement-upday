@@ -1,13 +1,10 @@
-from io import TextIOWrapper
-
-from decimal import Decimal
-import re
 import csv
 import os
-from datetime import datetime, date, timedelta
-from typing import Iterable, List, Dict, Any
-
+import re
 from bs4 import BeautifulSoup
+from datetime import datetime, date, timedelta
+from decimal import Decimal
+from io import TextIOWrapper
 from ofxstatement.parser import CsvStatementParser
 from ofxstatement.plugin import Plugin
 from ofxstatement.statement import Statement, StatementLine
@@ -17,6 +14,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from typing import Iterable, List, Dict, Any
 from webdriver_manager.chrome import ChromeDriverManager
 
 
@@ -38,7 +36,7 @@ def _validate_start_date(start_date: str) -> bool:
         # Parse della data di inizio
         start_dt = datetime.strptime(start_date, "%d/%m/%Y").date()
 
-        # Calcola la data limite (1 anno fa da oggi + 1 giorno) - solo la data, non l'ora
+        # Calcola la data limite (1 anno fa da oggi + 1 giorno per evitare problemi dovuti all'orario di esecuzione)
         one_year_ago = (datetime.now() - timedelta(days=364)).date()
 
         # Verifica se la data di inizio è troppo vecchia
@@ -826,6 +824,7 @@ def scrapeInfoFromWeb(start_date: str, end_date: str) -> List[Dict[str, Any]]:
             print("Chiusura del browser...")
             driver.quit()
 
+
 def sanitize_filename(filename: str) -> str:
     """Sanitizza il nome del file rimuovendo caratteri non validi"""
     # Rimuovi l'estensione se presente
@@ -840,6 +839,7 @@ def sanitize_filename(filename: str) -> str:
         filename = date.today().strftime("%Y-%m-%d_upday")
     # Aggiungi sempre l'estensione .csv
     return f"{filename}.csv"
+
 
 def save_transactions_to_csv(transactions: List[Dict[str, Any]], filename: str) -> bool:
     """
@@ -900,11 +900,10 @@ def save_transactions_to_csv(transactions: List[Dict[str, Any]], filename: str) 
         print(f"❌ Errore nel salvataggio del file CSV: {e}")
         return False
 
+
 # ============================================================================
 # OFXSTATEMENT PLUGIN CLASSES
 # ============================================================================
-
-
 
 
 class UpDayPlugin(Plugin):
@@ -943,10 +942,9 @@ class UpDayParser(CsvStatementParser):
     """Parser per i file CSV di UpDay - converte in formato OFX"""
 
     date_format = "%d/%m/%Y"
-    
-    # Csv column names
-    columns = ["data","ora","descrizione_operazione","tipo_operazione","numero_buoni","valore","luogo_utilizzo","indirizzo","codice_riferimento","pagina_origine"]
 
+    # Csv column names
+    columns = ["data", "ora", "descrizione_operazione", "tipo_operazione", "numero_buoni", "valore", "luogo_utilizzo", "indirizzo", "codice_riferimento", "pagina_origine"]
 
     mappings = {
         'date': 'data',
@@ -954,8 +952,8 @@ class UpDayParser(CsvStatementParser):
         'amount': 'valore'
     }
 
-    def __init__(self, filecvs: TextIOWrapper, account_id:str) -> None:
-        super().__init__(filecvs)
+    def __init__(self, csv_file: TextIOWrapper, account_id: str) -> None:
+        super().__init__(csv_file)
         self.statement.account_id = account_id
 
     def parse(self) -> Statement:
@@ -1003,9 +1001,8 @@ class UpDayParser(CsvStatementParser):
         ref_code = row_dict.get('codice_riferimento', '')
 
         # ID basato su data, ora, importo e codice riferimento
-        unique_id = f"{date_str}_{time_str}_{amount_str}_{ref_code}".replace('/', '').replace(':', '').replace(' ', '').replace(',', '').replace('.', '')
+        unique_id = re.sub(r'[\/: ,\.]', '', f"{date_str}_{time_str}_{amount_str}_{ref_code}")
         stmt_line.id = unique_id
-
         # Memo dettagliato con informazioni utili
         memo_parts = []
 
