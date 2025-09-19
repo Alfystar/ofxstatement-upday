@@ -1,8 +1,10 @@
+from io import TextIOWrapper
+
+from decimal import Decimal
 import re
 import csv
 import os
 from datetime import datetime, date, timedelta
-
 from typing import Iterable, List, Dict, Any
 
 from bs4 import BeautifulSoup
@@ -36,8 +38,8 @@ def _validate_start_date(start_date: str) -> bool:
         # Parse della data di inizio
         start_dt = datetime.strptime(start_date, "%d/%m/%Y").date()
 
-        # Calcola la data limite (1 anno fa da oggi) - solo la data, non l'ora
-        one_year_ago = (datetime.now() - timedelta(days=365)).date()
+        # Calcola la data limite (1 anno fa da oggi + 1 giorno) - solo la data, non l'ora
+        one_year_ago = (datetime.now() - timedelta(days=364)).date()
 
         # Verifica se la data di inizio è troppo vecchia
         if start_dt < one_year_ago:
@@ -106,6 +108,7 @@ def _get_date_from_user(info: str = "inizio", optional: bool = False) -> str:
 
 
 def _setup_browser():
+    # TODO: scegliere quale browser usare in base alla configurazione
     """Configura e avvia il browser Chrome"""
     print("Avvio del browser...")
 
@@ -930,32 +933,120 @@ class UpDayPlugin(Plugin):
                 print(f"📍 Percorso completo: {os.path.abspath(filename)}")
             else:
                 print("❌ Errore nel salvataggio del file")
-
-        exit(0)  # Rimuovere in produzione
-        return UpDayParser(filename)
+                exit(1)
+        f = open(filename, 'r', encoding=self.settings.get("charset", "UTF-8"))
+        default_account = self.settings.get("default_account")
+        return UpDayParser(f, default_account)
 
 
 class UpDayParser(CsvStatementParser):
-    def __init__(self, transactions_data) -> None:
-        super().__init__()
-        self.transactions_data = transactions_data
+    """Parser per i file CSV di UpDay - converte in formato OFX"""
+
+    date_format = "%d/%m/%Y"
+    
+    # Csv column names
+    columns = ["data","ora","descrizione_operazione","tipo_operazione","numero_buoni","valore","luogo_utilizzo","indirizzo","codice_riferimento","pagina_origine"]
+
+
+    mappings = {
+        'date': 'data',
+        'memo': 'descrizione_operazione',
+        'amount': 'valore'
+    }
+
+    def __init__(self, filecvs: TextIOWrapper, account_id:str) -> None:
+        super().__init__(filecvs)
+        self.statement.account_id = account_id
 
     def parse(self) -> Statement:
-        # Processa i dati estratti
-        return super().parse()
+        """Parse del file CSV e creazione dello statement OFX"""
+        stmt = super().parse()
+
+        # Imposta informazioni account da configurazione
+        stmt.currency = 'EUR'
+        stmt.bank_id = 'UPDAY'
+
+        return stmt
 
     def split_records(self) -> Iterable[str]:
-        """Restituisce i dati delle tabelle per l'elaborazione"""
-        # Per ora restituiamo solo un placeholder per ogni tabella
-        # La logica di parsing delle transazioni verrà implementata successivamente
-        return [f"Table {i + 1}" for i in range(len(self.transactions_data))]
+        """Return iterable object consisting of a line per transaction"""
+
+        reader = csv.reader(self.fin, delimiter=',')
+        next(reader, None)
+        return reader
 
     def parse_record(self, line: str) -> StatementLine:
-        """Parse del singolo record - da implementare in seguito"""
-        # Qui implementeremo la logica per convertire i dati HTML
-        # delle tabelle in oggetti StatementLine
-        return StatementLine()
+        """Parse della singola riga CSV """
 
-    def get_scraped_data(self) -> List[Dict[str, Any]]:
-        """Restituisce i dati estratti per debug/analisi"""
-        return self.transactions_data
+        row_dict = dict(zip(self.columns, line))
+
+        # Crea oggetto StatementLine
+        stmt_line = StatementLine()
+
+        # Parse data
+        try:
+            parsed_date = datetime.strptime(row_dict['data'], self.date_format)
+            stmt_line.date = parsed_date  # Passa datetime completo, non solo date
+        except (ValueError, KeyError):
+            return StatementLine()  # Ritorna StatementLine vuoto invece di None
+
+        # Parse importo usando Decimal per compatibilità OFX
+        try:
+            stmt_line.amount = Decimal(str(row_dict['valore']))
+        except (ValueError, KeyError):
+            stmt_line.amount = Decimal('0.0')
+
+        # Crea ID unico per la transazione
+        date_str = row_dict.get('data', '')
+        time_str = row_dict.get('ora', '')
+        amount_str = row_dict.get('valore', '')
+        ref_code = row_dict.get('codice_riferimento', '')
+
+        # ID basato su data, ora, importo e codice riferimento
+        unique_id = f"{date_str}_{time_str}_{amount_str}_{ref_code}".replace('/', '').replace(':', '').replace(' ', '').replace(',', '').replace('.', '')
+        stmt_line.id = unique_id
+
+        # Memo dettagliato con informazioni utili
+        memo_parts = []
+
+        # Aggiungi descrizione operazione
+        if row_dict.get('descrizione_operazione'):
+            memo_parts.append(row_dict['descrizione_operazione'])
+
+        # Aggiungi numero buoni per gli utilizzi
+        if row_dict.get('numero_buoni') and row_dict.get('numero_buoni') != '0':
+            try:
+                num_buoni = int(row_dict['numero_buoni'])
+                if num_buoni > 0:
+                    memo_parts.append(f"Buoni: {num_buoni}")
+            except ValueError:
+                pass
+
+        # Aggiungi luogo per gli utilizzi
+        if row_dict.get('luogo_utilizzo'):
+            memo_parts.append(f"Presso: {row_dict['luogo_utilizzo']}")
+
+        # Aggiungi indirizzo se disponibile
+        if row_dict.get('indirizzo'):
+            memo_parts.append(f"({row_dict['indirizzo']})")
+
+        # Aggiungi codice riferimento per gli accrediti
+        if row_dict.get('codice_riferimento'):
+            memo_parts.append(f"Cod.Rif: {row_dict['codice_riferimento']}")
+
+        # Aggiungi ora se significativa (non 00:00)
+        if row_dict.get('ora') and row_dict['ora'] != '00:00':
+            memo_parts.append(f"Ore: {row_dict['ora']}")
+
+        stmt_line.memo = ' - '.join(memo_parts)
+
+        # Tipo transazione
+        tipo_op = row_dict.get('tipo_operazione', '')
+        if tipo_op == 'credit':
+            stmt_line.trntype = 'DEP'
+        elif tipo_op == 'usage':
+            stmt_line.trntype = 'PAYMENT'
+        else:
+            stmt_line.trntype = 'OTHER'
+
+        return stmt_line

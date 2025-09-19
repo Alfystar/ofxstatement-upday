@@ -17,3 +17,4 @@ __pycache__
 .github
 # Output files
 *.csv
+*.ofx

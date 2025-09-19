@@ -1,155 +1,193 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-UpDay plugin for ofxstatement
+Plugin UpDay per ofxstatement
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Questo plugin per ofxstatement permette di importare le transazioni dei buoni pasto UpDay
-utilizzando web scraping del sito day.it.
+Questo plugin per ofxstatement permette di importare automaticamente le transazioni dei buoni pasto UpDay dal sito day.it e convertirle nel formato OFX compatibile con software di contabilità come GnuCash.
 
-`ofxstatement`_ è uno strumento per convertire estratti conto bancari proprietari nel formato OFX,
-adatto per l'importazione in GnuCash e altri software di contabilità.
+`ofxstatement`_ è uno strumento per convertire estratti conto proprietari nel formato OFX standard.
 
 .. _ofxstatement: https://github.com/kedder/ofxstatement
 
-Caratteristiche
-===============
+Descrizione
+===========
 
-* Web scraping automatico del sito utilizzatori.day.it
-* Login manuale per maggiore sicurezza
-* Navigazione automatica tra le pagine di risultati
-* Estrazione di tutte le transazioni nel periodo specificato
-* Conversione in formato OFX standard
+UpDay è un'azienda italiana che si occupa della gestione di buoni pasto aziendali. Questo plugin automatizza il processo di estrazione e conversione dei movimenti dal portale web utilizzatori.day.it.
+
+**Funzionalità principali:**
+
+* **Download automatico** tramite web scraping del sito utilizzatori.day.it
+* **Salvataggio CSV** per modifiche offline e riesportazioni successive
+* **Conversione OFX** compatibile con software di contabilità
+* **Gestione automatica** della paginazione e navigazione del sito
+* **Validazione date** con controllo del limite di 1 anno del sito
+
+**Perché il web scraping?**
+
+Al momento UpDay non fornisce un sistema di esportazione diretta dei dati tramite file o API. Il web scraping è stato implementato come soluzione temporanea in attesa che l'azienda introduca metodi di esportazione più convenienti per gli utenti.
+
+Come funziona il download
+=========================
+
+Il processo di download automatico avviene in questi passaggi:
+
+1. **Avvio browser Chrome** in modalità visibile per gestire eventuali CAPTCHA
+2. **Login manuale** - L'utente deve effettuare il login nel browser
+3. **Navigazione automatica** alla sezione movimenti buoni pasto
+4. **Impostazione filtri** data con validazione del limite di 1 anno
+5. **Scraping multipagina** con estrazione di tutte le transazioni disponibili
+6. **Parsing HTML** delle tabelle generate dinamicamente via PHP
+7. **Salvataggio CSV** per backup e modifiche offline
+8. **Conversione OFX** per l'importazione in software di contabilità
+
+**Note tecniche:**
+- Il sito genera le tabelle dinamicamente via PHP senza API REST
+- Durante il login potrebbe essere necessario risolvere un reCAPTCHA
+- Il sistema riconosce automaticamente quando si è sulla home page
+- La paginazione viene gestita automaticamente fino all'ultima pagina
 
 Requisiti
 =========
 
-* Python 3.9+
-* Chrome/Chromium browser installato
+* Python 3.9 o superiore
+* Browser Google Chrome installato
 * Account UpDay attivo su day.it
+* Accesso internet per il web scraping
 
 Installazione
 =============
 
-1. Clona questo repository::
+1. Clona o scarica questo repository::
 
     $ git clone <repository-url> ofxstatement-upday
     $ cd ofxstatement-upday
 
-2. Installa con pipenv::
+2. Installa il plugin::
 
-    $ pipenv install
-    $ pipenv shell
+    $ pip install -e .
 
 3. Verifica l'installazione::
 
     $ ofxstatement list-plugins
 
-Dovresti vedere il plugin 'upday' nella lista.
+Dovresti vedere 'upday' nella lista dei plugin disponibili.
+
+Configurazione
+==============
+
+Aggiungi la configurazione al file di configurazione di ofxstatement (solitamente ``~/.config/ofxstatement/config.ini``)::
+
+    [upday]
+    plugin = upday
+    account = UPDAY_BUONI_PASTO
+    browser = chrome
+
+**Parametri di configurazione:**
+
+* ``plugin``: Deve essere sempre "upday"
+* ``account``: Nome dell'account per identificare le transazioni (default: UPDAY_BUONI_PASTO)
+* ``browser``: Browser da utilizzare (attualmente supportato solo "chrome")
 
 Utilizzo
 ========
 
-**Metodo 1 - Comando diretto:**
+**Estrazione automatica con web scraping:**
 
-Per convertire i dati UpDay in formato OFX, esegui::
+Per scaricare automaticamente i dati dal sito UpDay::
 
-    $ ofxstatement convert -t upday dummy_input.txt output.ofx
+    $ ofxstatement convert -t upday - output.ofx
 
-Il file dummy_input.txt può essere vuoto o contenere qualsiasi testo, dato che i dati vengono estratti direttamente dal web.
+Il plugin richiederà:
 
-**Metodo 2 - Script Python:**
+1. **Data di inizio**: Formato gg/mm/aaaa (max 1 anno fa)
+2. **Data di fine**: Opzionale, se vuota usa la data odierna
+3. **Nome file CSV**: Per salvare i dati estratti (opzionale)
 
-Puoi anche usare il plugin direttamente in Python::
+Il processo salverà automaticamente un file CSV e genererà il file OFX.
 
-    from ofxstatement_upday.upday import scrapeInfoFromWeb
+**Conversione da file CSV esistente:**
 
-    # Estrai solo i dati grezzi
-    data = scrapeInfoFromWeb("01/01/2024")
-    print(f"Estratte {len(data)} pagine di dati")
+Se hai già un file CSV da una precedente estrazione::
 
-Processo di utilizzo
-====================
+    $ ofxstatement convert -t upday estratto_upday.csv output.ofx
 
-Quando esegui il plugin, il processo sarà il seguente:
+Questo permette di riprocessare i dati senza ripetere il web scraping.
 
-1. **Inserimento data**: Ti verrà chiesto di inserire la data di inizio in formato gg/mm/aaaa
-2. **Apertura browser**: Si aprirà automaticamente una finestra di Chrome
-3. **Login manuale**: Dovrai effettuare il login manualmente sul sito day.it
-4. **Conferma**: Premi INVIO nel terminale quando hai completato il login
-5. **Scraping automatico**: Il plugin navigherà automaticamente e estrarrà i dati
-6. **Output**: Verrà generato il file OFX con le transazioni
-
-Esempio di sessione
-===================
+**Esempio di utilizzo completo:**
 
 ::
 
-    $ ofxstatement convert -t upday input.txt transactions.ofx
-    Inserisci la data di inizio (formato gg/mm/aaaa, g/m/aa, ecc.): 01/01/2024
-    === INIZIO SCRAPING UPDAY ===
-    Avvio del browser...
-    Navigazione alla pagina di login...
+    $ ofxstatement convert -t upday - movimenti_settembre.ofx
 
-    ============================================================
-    EFFETTUA IL LOGIN MANUALMENTE NEL BROWSER
-    Una volta loggato, premi INVIO qui per continuare...
-    ============================================================
-    Premi INVIO quando hai completato il login:
+    Inserisci la data di inizio (formato gg/mm/aaaa): 01/09/2024
+    Inserisci la data di fine [se vuoto, usa oggi]: 30/09/2024
+    Inserisci il nome del file csv: settembre_2024
 
-    Login completato con successo!
-    Navigazione alla pagina dei movimenti...
-    Impostazione filtro data: 01/01/2024
-    Inizio scraping delle pagine...
-    Scraping pagina 1...
-    Dati estratti dalla pagina 1
-    Scraping pagina 2...
-    Dati estratti dalla pagina 2
-    Nessuna pagina successiva disponibile
-    === SCRAPING COMPLETATO: 2 pagine elaborate ===
-    Chiusura del browser...
+    [... processo di web scraping ...]
+
+    ✅ File CSV salvato: settembre_2024.csv
+    📄 File OFX generato: movimenti_settembre.ofx
+
+Formato dati
+============
+
+Il file CSV intermedio contiene le seguenti colonne:
+
+* ``data``: Data della transazione (gg/mm/aaaa)
+* ``ora``: Ora della transazione (hh:mm)
+* ``descrizione_operazione``: Tipo operazione (Accredito/Utilizzo Buoni)
+* ``tipo_operazione``: credit/usage
+* ``numero_buoni``: Numero di buoni utilizzati/accreditati
+* ``valore``: Importo in euro (positivo per accrediti, negativo per utilizzi)
+* ``luogo_utilizzo``: Nome dell'esercente (per gli utilizzi)
+* ``indirizzo``: Indirizzo dell'esercente (per gli utilizzi)
+* ``codice_riferimento``: Codice della ricarica (per gli accrediti)
+* ``pagina_origine``: Numero di pagina da cui è stata estratta la transazione
+
+Il file OFX generato includerà memo dettagliati con tutte le informazioni rilevanti.
 
 Risoluzione problemi
-====================
+===================
 
-**Chrome non trovato:**
-Assicurati di avere Chrome o Chromium installato. Il plugin usa webdriver-manager per scaricare automaticamente il driver.
+**Errore "Data di inizio non valida"**
 
-**Errori di login:**
-Se il sito cambia la struttura della pagina di login, potrebbe essere necessario aggiornare i selettori nel codice.
+Il sito UpDay permette di accedere solo ai dati dell'ultimo anno. Verifica che la data di inizio non sia anteriore a 365 giorni fa.
 
-**Timeout durante il scraping:**
-Aumenta i tempi di attesa nelle impostazioni o verifica la connessione internet.
+**Errore durante il login**
 
-**Paginazione non funzionante:**
-Il plugin cerca automaticamente la paginazione con id "pg_page". Se il sito cambia questa struttura, sarà necessario aggiornare il codice.
+1. Assicurati che Chrome sia installato e aggiornato
+2. Effettua il login manualmente quando richiesto
+3. Risolvi eventuali CAPTCHA che potrebbero apparire
+4. Attendi di essere sulla home page prima di premere INVIO
 
-Sviluppo
-========
+**Browser si chiude inaspettatamente**
 
-Per sviluppare e testare il plugin::
+Questo può accadere durante la paginazione. Il plugin gestisce automaticamente gli errori "stale element reference" riprovando la navigazione.
 
-    $ pipenv install --dev
-    $ pipenv shell
-    $ python -m pytest tests/
+**Nessuna transazione trovata**
 
-Per testare solo il web scraping senza generare OFX::
-
-    $ python -c "
-    from ofxstatement_upday.upday import scrapeInfoFromWeb
-    data = scrapeInfoFromWeb('01/01/2024')
-    print(f'Dati estratti: {len(data)} pagine')
-    for page in data:
-        print(f'Pagina {page[\"page\"]}: {len(page[\"html\"])} caratteri HTML')
-    "
+Verifica che ci siano effettivamente delle transazioni nel periodo selezionato accedendo manualmente al sito.
 
 Limitazioni
 ===========
 
-* Richiede login manuale per sicurezza
-* Dipende dalla struttura HTML del sito day.it
-* Necessita di Chrome/Chromium installato
-* Funziona solo con account UpDay attivi
+* Supporta solo browser Chrome/Chromium
+* Richiede login manuale per motivi di sicurezza
+* Limitato ai dati dell'ultimo anno (limitazione del sito UpDay)
+* Dipende dalla struttura HTML del sito (potrebbe rompersi con aggiornamenti), vi progetteremo segnalare eventuali cambiamenti del sito.
+
+Contributi
+==========
+
+Contributi, segnalazioni di bug e richieste di funzionalità sono benvenuti. Per favore apri un issue o invia una pull request.
 
 Licenza
 =======
 
-Questo progetto è rilasciato sotto licenza GPL v3.
+Questo plugin è rilasciato sotto licenza GPL v3. Vedi il file LICENSE per i dettagli.
+
+Disclaimer
+==========
+
+Questo plugin è un progetto indipendente e non è affiliato con UpDay S.p.A. È stato creato per facilitare la gestione dei propri dati personali e non ha scopi commerciali.
+
+L'utilizzo avviene a proprio rischio. Gli autori non sono responsabili per eventuali problemi derivanti dall'uso del plugin.
