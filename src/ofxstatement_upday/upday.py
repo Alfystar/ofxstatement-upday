@@ -1003,47 +1003,78 @@ class UpDayParser(CsvStatementParser):
         # ID basato su data, ora, importo e codice riferimento
         unique_id = re.sub(r'[\/: ,\.]', '', f"{date_str}_{time_str}_{amount_str}_{ref_code}")
         stmt_line.id = unique_id
-        # Memo dettagliato con informazioni utili
-        memo_parts = []
 
-        # Aggiungi descrizione operazione
-        if row_dict.get('descrizione_operazione'):
-            memo_parts.append(row_dict['descrizione_operazione'])
-
-        # Aggiungi numero buoni per gli utilizzi
-        if row_dict.get('numero_buoni') and row_dict.get('numero_buoni') != '0':
-            try:
-                num_buoni = int(row_dict['numero_buoni'])
-                if num_buoni > 0:
-                    memo_parts.append(f"Buoni: {num_buoni}")
-            except ValueError:
-                pass
-
-        # Aggiungi luogo per gli utilizzi
-        if row_dict.get('luogo_utilizzo'):
-            memo_parts.append(f"Presso: {row_dict['luogo_utilizzo']}")
-
-        # Aggiungi indirizzo se disponibile
-        if row_dict.get('indirizzo'):
-            memo_parts.append(f"({row_dict['indirizzo']})")
-
-        # Aggiungi codice riferimento per gli accrediti
-        if row_dict.get('codice_riferimento'):
-            memo_parts.append(f"Cod.Rif: {row_dict['codice_riferimento']}")
-
-        # Aggiungi ora se significativa (non 00:00)
-        if row_dict.get('ora') and row_dict['ora'] != '00:00':
-            memo_parts.append(f"Ore: {row_dict['ora']}")
-
-        stmt_line.memo = ' - '.join(memo_parts)
-
-        # Tipo transazione
+        # Determina il tipo di operazione per personalizzare il memo
         tipo_op = row_dict.get('tipo_operazione', '')
+
         if tipo_op == 'credit':
+            # MEMO PER ACCREDITI - stile specifico con mese di assegnazione
+            try:
+                # Estrai il mese dalla data per determinare il mese di assegnazione
+                parsed_date = datetime.strptime(row_dict['data'], self.date_format)
+                mese_nomi = {
+                    1: 'Gennaio', 2: 'Febbraio', 3: 'Marzo', 4: 'Aprile',
+                    5: 'Maggio', 6: 'Giugno', 7: 'Luglio', 8: 'Agosto',
+                    9: 'Settembre', 10: 'Ottobre', 11: 'Novembre', 12: 'Dicembre'
+                }
+                mese_nome = mese_nomi.get(parsed_date.month, 'Sconosciuto')
+
+                # Numero buoni accreditati
+                num_buoni = row_dict.get('numero_buoni', '0')
+                if num_buoni and num_buoni != '0':
+                    stmt_line.memo = f"Buoni pasto assegnati per il mese di {mese_nome} (+{num_buoni})"
+                else:
+                    stmt_line.memo = f"Buoni pasto assegnati per il mese di {mese_nome}"
+
+                # Aggiungi codice riferimento se disponibile
+                if row_dict.get('codice_riferimento'):
+                    stmt_line.memo += f" - Cod.Rif: {row_dict['codice_riferimento']}"
+
+            except:
+                # Fallback se c'è un errore nel parsing della data
+                stmt_line.memo = row_dict.get('descrizione_operazione', 'Accredito Buoni')
+                if row_dict.get('numero_buoni') and row_dict.get('numero_buoni') != '0':
+                    stmt_line.memo += f" (+{row_dict['numero_buoni']})"
+
             stmt_line.trntype = 'DEP'
+
         elif tipo_op == 'usage':
+            # MEMO PER UTILIZZI - stile come negli acquisti con luogo e orario
+            memo_parts = []
+
+            # Nome esercente se disponibile
+            luogo = row_dict.get('luogo_utilizzo', '').strip()
+            if luogo:
+                memo_parts.append(f"Spesa al {luogo}")
+            else:
+                memo_parts.append("Spesa")
+
+            # Numero buoni utilizzati
+            num_buoni = row_dict.get('numero_buoni', '0')
+            if num_buoni and num_buoni != '0':
+                try:
+                    buoni_int = int(num_buoni)
+                    if buoni_int == 1:
+                        memo_parts.append(f"{buoni_int} buono pasto")
+                    else:
+                        memo_parts.append(f"{buoni_int} buoni pasto")
+                except ValueError:
+                    pass
+
+            # Aggiungi indirizzo se disponibile
+            if row_dict.get('indirizzo'):
+                memo_parts.append(f"({row_dict['indirizzo']})")
+
+            # Aggiungi ora se significativa (non 00:00)
+            if row_dict.get('ora') and row_dict['ora'] != '00:00':
+                memo_parts.append(f"ore {row_dict['ora']}")
+
+            stmt_line.memo = ' - '.join(memo_parts)
             stmt_line.trntype = 'PAYMENT'
+
         else:
+            # Fallback per tipi di operazione sconosciuti
+            stmt_line.memo = row_dict.get('descrizione_operazione', 'Transazione')
             stmt_line.trntype = 'OTHER'
 
         return stmt_line
