@@ -61,9 +61,78 @@ Il plugin gestisce automaticamente ChromeDriver con una strategia intelligente:
 pip install ofxstatement-upday
 ```
 
-Questa installazione include tutte le dipendenze necessarie, incluso il sistema di gestione automatica di ChromeDriver.
+Questa installazione include tutte le dipendenze necessarie, incluso il sistema di gestione automatica di Chrome (per scraping automatico).
 
-### Installazione ChromeDriver Manuale (Opzionale ma Raccomandata)
+## Configurazione
+
+Per modificare il file di configurazione, esegui:
+
+```bash
+ofxstatement edit-config
+```
+
+Si aprirà un editor vim con la configurazione attuale. Aggiungi la configurazione del plugin:
+
+```ini
+[upday-config]
+plugin = upday
+account = UPDAY_BUONI_PASTO
+browser = chrome
+```
+
+### **Parametri di configurazione:**
+
+- `upday-config`: Nome della configurazione, selezionata dall'opzione `-t upday-config`, puoi cambiarlo come preferisci e averne più di una, ma ogni una di esse deve essere univoca
+- `plugin`: Deve essere sempre "upday"
+- `account`: Nome dell'account per identificare le transazioni (default: UPDAY_BUONI_PASTO)
+- `browser`: Browser da utilizzare (attualmente supportato solo "chrome")
+
+> **Nota**: Puoi avere tutte le configurazioni che desideri, basta aggiungere una nuova sezione con la stessa struttura e cambiare il nome della sezione.
+
+### Utilizzo in Script
+
+```bash
+# Per download automatico e conversione
+ofxstatement convert -t upday-config - upday.ofx
+# Per automazione, usa file CSV già esistenti
+ofxstatement convert -t upday-config movimento_upday.csv output.ofx
+```
+
+### Aggiungere un alias
+
+Per semplificare l'uso del plugin, si consiglia di aggiungere un alias al sistema aggiungendo questo comando al file *.bash_aliases*:
+
+```bash
+printf '\n# UpDay CSV convert to OFX format\nalias ofxUpday="ofxstatement convert -t upday"\n' >> ~/.bash_aliases
+```
+
+Dopo aver ricaricato il terminale, l'utilizzo diventa:
+
+```bash
+# Per download automatico e conversione
+ofxUpday - upday.ofx
+# Per automazione, usa file CSV già esistenti
+ofxUpday estratto_upday.csv upday.ofx
+```
+
+**Nota**: Se dopo il ricaricamento gli alias non vengono caricati, verifica che nel tuo *.bashrc* siano presenti le seguenti righe:
+
+```bash
+# Alias definitions.
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+```
+
+## Privacy e Sicurezza
+
+- **Nessuna memorizzazione credenziali**: Il plugin non salva username o password
+- **Solo lettura**: Accede solo in lettura ai dati delle transazioni
+- **Locale**: Tutti i dati vengono elaborati localmente sul tuo computer
+- **Open source**: Il codice è ispezionabile su GitHub
+
+<details>
+<summary>Installazione manuale di ChromeDriver (se il download automatico fallisce)</summary>
 
 Per evitare dipendenze dalla connessione internet e garantire massima affidabilità:
 
@@ -100,13 +169,18 @@ sudo chmod +x /usr/bin/chromedriver
 3. Aggiungi la cartella al PATH di sistema
 4. Verifica: apri cmd e digita `chromedriver --version`
 
-### Da sorgenti (per sviluppatori)
+</details>
+
+<details>
+<summary>Da sorgenti (per sviluppatori)</summary>
 
 ```bash
 git clone https://github.com/Alfystar/ofxstatement-upday.git
 cd ofxstatement-upday
 pip install -e .
 ```
+
+</details>
 
 ## Utilizzo
 
@@ -152,6 +226,9 @@ ofxUpDay movimento_upday.csv output.ofx
 
 ### Esempio Completo: Download Automatico
 
+<details>
+<summary>Log di esempio</summary>
+
 ```bash
 $ ofxUpDay - upday_ottobre_2024.ofx
 Inserisci la data di inizio (formato gg/mm/aaaa): 01/10/2024
@@ -178,6 +255,8 @@ Inserisci il nome del file csv: ottobre_2024_upday
 📊 Transazioni salvate: 27
 🎉 Estrazione completata con successo!
 ```
+
+</details>
 
 ### Esempio Completo: Solo Conversione
 
@@ -254,25 +333,6 @@ data,ora,descrizione_operazione,tipo_operazione,numero_buoni,valore,luogo_utiliz
 - `codice_riferimento`: Codice di riferimento (solo per accrediti)
 - `pagina_origine`: Numero di pagina da cui è stata estratta
 
-## Configurazione Avanzata
-
-### Personalizzazione Account
-
-Crea un file di configurazione per evitare di inserire l'account ogni volta:
-
-```ini
-# ~/.config/ofxstatement/upday.conf
-[upday]
-default_account = 1234567890
-charset = UTF-8
-```
-
-### Utilizzo in Script
-
-```bash
-# Per automazione, usa file CSV esistenti
-ofxstatement convert -t upday movimento_upday.csv output.ofx
-```
 
 ## Limitazioni Conosciute
 
@@ -280,13 +340,6 @@ ofxstatement convert -t upday movimento_upday.csv output.ofx
 - **Dipendenza browser**: La modalità download automatico richiede Google Chrome
 - **Rate limiting**: Uso eccessivo potrebbe causare blocchi temporanei dal sito
 - **Cambio sito**: Aggiornamenti del sito UpDay potrebbero richiedere aggiornamenti del plugin
-
-## Privacy e Sicurezza
-
-- **Nessuna memorizzazione credenziali**: Il plugin non salva username o password
-- **Solo lettura**: Accede solo in lettura ai dati delle transazioni
-- **Locale**: Tutti i dati vengono elaborati localmente sul tuo computer
-- **Open source**: Il codice è ispezionabile su GitHub
 
 ## Contributi
 
