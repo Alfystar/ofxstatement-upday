@@ -20,6 +20,96 @@ UpDay è un'azienda italiana che si occupa della gestione di buoni pasto azienda
 
 Al momento UpDay non fornisce un sistema di esportazione diretta dei dati tramite file o API. Il web scraping è stato implementato come soluzione temporanea in attesa che l'azienda introduca metodi di esportazione più convenienti per gli utenti.
 
+## Requisiti
+
+- Python 3.9 o superiore
+- Browser Google Chrome installato
+- Account UpDay attivo su day.it
+- Accesso internet per il web scraping
+
+## Installazione
+
+### Da PyPI (raccomandato)
+
+```bash
+pip install ofxstatement-upday
+```
+
+### Da sorgenti
+
+```bash
+git clone https://github.com/Alfystar/ofxstatement-upday.git
+cd ofxstatement-upday
+pip install build
+python3 -m build --sdist --wheel
+pip install dist/ofxstatement_upday-<version>.tar.gz  # sostituisci <version> con il numero di versione
+```
+
+### Per sviluppatori (con pipenv)
+
+Se vuoi contribuire al progetto o modificare il codice:
+
+```bash
+git clone https://github.com/Alfystar/ofxstatement-upday.git
+cd ofxstatement-upday
+pip install pipenv
+pipenv install --dev
+pipenv shell
+```
+
+Questo comando:
+1. Crea un ambiente virtuale isolato
+2. Installa tutte le dipendenze di sviluppo dal `Pipfile`
+3. Installa il plugin in modalità sviluppo (editable mode)
+4. Attiva l'ambiente virtuale
+
+Per testare le modifiche durante lo sviluppo:
+
+```bash
+# Dentro l'ambiente pipenv
+ofxstatement list-plugins  # verifica che 'upday' sia presente
+ofxstatement convert -t upday test_file.csv output.ofx
+```
+
+Per uscire dall'ambiente virtuale:
+
+```bash
+exit
+```
+
+### Verifica installazione
+
+```bash
+ofxstatement list-plugins
+```
+
+Dovresti vedere 'upday' nella lista dei plugin disponibili.
+
+## Configurazione
+
+Per modificare il file di configurazione, esegui:
+
+```bash
+ofxstatement edit-config
+```
+
+Si aprirà un editor vim con la configurazione attuale. Aggiungi la configurazione del plugin:
+
+```ini
+[upday]
+plugin = upday
+account = UPDAY_BUONI_PASTO
+browser = chrome
+```
+
+### **Parametri di configurazione:**
+
+- `plugin`: Deve essere sempre "upday"
+- `account`: Nome dell'account per identificare le transazioni (default: UPDAY_BUONI_PASTO)
+- `browser`: Browser da utilizzare (attualmente supportato solo "chrome")
+
+> **Nota**: Puoi avere tutte le configurazioni che desideri, basta aggiungere una nuova sezione con la stessa struttura e cambiare il nome della sezione.
+
 ## Come funziona il download
 
 Il processo di download automatico avviene in questi passaggi:
@@ -38,53 +128,6 @@ Il processo di download automatico avviene in questi passaggi:
 - Durante il login potrebbe essere necessario risolvere un reCAPTCHA
 - Il sistema riconosce automaticamente quando si è sulla home page
 - La paginazione viene gestita automaticamente fino all'ultima pagina
-
-## Requisiti
-
-- Python 3.9 o superiore
-- Browser Google Chrome installato
-- Account UpDay attivo su day.it
-- Accesso internet per il web scraping
-
-## Installazione
-
-1. Clona o scarica questo repository:
-
-```bash
-git clone <repository-url> ofxstatement-upday
-cd ofxstatement-upday
-```
-
-2. Installa il plugin:
-
-```bash
-pip install -e .
-```
-
-3. Verifica l'installazione:
-
-```bash
-ofxstatement list-plugins
-```
-
-Dovresti vedere 'upday' nella lista dei plugin disponibili.
-
-## Configurazione
-
-Aggiungi la configurazione al file di configurazione di ofxstatement (solitamente `~/.config/ofxstatement/config.ini`):
-
-```ini
-[upday]
-plugin = upday
-account = UPDAY_BUONI_PASTO
-browser = chrome
-```
-
-### **Parametri di configurazione:**
-
-- `plugin`: Deve essere sempre "upday"
-- `account`: Nome dell'account per identificare le transazioni (default: UPDAY_BUONI_PASTO)
-- `browser`: Browser da utilizzare (attualmente supportato solo "chrome")
 
 ## Utilizzo
 
@@ -127,6 +170,29 @@ Inserisci il nome del file csv: settembre_2024
 
 ✅ File CSV salvato: settembre_2024.csv
 📄 File OFX generato: movimenti_settembre.ofx
+```
+
+### Aggiungere un alias
+
+Per semplificare l'uso del plugin, si consiglia di aggiungere un alias al sistema aggiungendo questo comando al file *.bash_aliases*:
+
+```bash
+printf '\n# UpDay CSV convert to OFX format\nalias ofxUpday="ofxstatement convert -t upday"\n' >> ~/.bash_aliases
+```
+
+Dopo aver ricaricato il terminale, l'utilizzo diventa:
+
+```bash
+ofxUpday estratto_upday.csv upday.ofx
+```
+
+**Nota**: Se dopo il ricaricamento gli alias non vengono caricati, verifica che nel tuo *.bashrc* siano presenti le seguenti righe:
+
+```bash
+# Alias definitions.
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
 ```
 
 ## Formato dati

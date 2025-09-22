@@ -1,15 +1,15 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=61", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ofxstatement-upday"
-version = "1.0.0"
+version = "1.0.0-1"
 description = "Plugin per ofxstatement per importare transazioni buoni pasto UpDay"
 authors = [
   { name="Alfystar", email="alfystar1701@gmail.com" },
 ]
-readme = "README.rst"
+readme = { file = "README.md", content-type = "text/markdown" }
 license = {text = "GPLv3"}
 keywords = ["ofx", "banking", "statement", "upday", "buoni pasto"]
 classifiers = [
