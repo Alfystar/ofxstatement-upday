@@ -110,38 +110,88 @@ pip install -e .
 
 ## Utilizzo
 
-### Comando Base
+Il plugin supporta **due modalità di utilizzo**:
+
+### 🌐 **Modalità 1: Download Automatico** (raccomandato)
+
+Usa il carattere speciale `-` come nome del file di input per attivare il **web scraping automatico**:
 
 ```bash
 ofxUpDay - output.ofx
 ```
 
-Il plugin ti guiderà attraverso:
-1. **Inserimento date** di inizio e fine
-2. **Avvio automatico** del browser Chrome
-3. **Login manuale** sul sito UpDay (quando necessario)
-4. **Estrazione automatica** di tutte le transazioni
-5. **Salvataggio** in formato CSV e conversione OFX
+**Cosa succede:**
+1. Il plugin avvia automaticamente Chrome
+2. Ti chiede di inserire le date di inizio e fine
+3. Esegue il login automatico (o ti chiede di farlo manualmente)
+4. Scarica automaticamente tutte le transazioni dal sito UpDay
+5. Salva i dati in un file CSV intermedio
+6. Converte il CSV in formato OFX
 
-### Esempio Completo
+**Requisiti:**
+- Connessione internet attiva
+- Chrome e ChromeDriver funzionanti
+- Account UpDay valido
+
+### 📁 **Modalità 2: Solo Conversione** (per file esistenti)
+
+Usa un file CSV esistente (scaricato precedentemente) per **solo convertire** in OFX:
 
 ```bash
-$ ofxUpDay - upday_settembre_2024.ofx
-Inserisci la data di inizio (formato gg/mm/aaaa): 01/09/2024
-Inserisci la data di fine [se vuoto, usa oggi]: 30/09/2024
-Date selezionate: da '01/09/2024' a '30/09/2024'
+ofxUpDay movimento_upday.csv output.ofx
+```
 
-=== INIZIO SCRAPING UPDAY ===
-🔍 Tentativo 1: Ricerca ChromeDriver già installato nel sistema...
-✅ Trovato ChromeDriver in: /opt/homebrew/bin/chromedriver
-🎉 Browser avviato con successo usando ChromeDriver locale
+**Cosa succede:**
+1. Il plugin legge direttamente il file CSV fornito
+2. Converte i dati dal CSV al formato OFX
+3. Non richiede connessione internet o browser
 
-[... processo di scraping ...]
+**Requisiti:**
+- Solo il file CSV con il formato corretto
+- Nessuna connessione internet necessaria
 
-✅ File CSV salvato con successo: settembre_upday.csv
-📊 Transazioni salvate: 42
+### Esempio Completo: Download Automatico
+
+```bash
+$ ofxUpDay - upday_ottobre_2024.ofx
+Inserisci la data di inizio (formato gg/mm/aaaa): 01/10/2024
+Inserisci la data di fine [se vuoto, usa oggi]: 31/10/2024
+Date selezionate: da '01/10/2024' a '31/10/2024'
+
+🚀 Avvio del browser...
+  • 🔍 Tentativo 1: Uso ChromeDriver predefinito di sistema
+    ◦ 🎉 Browser avviato con successo usando ChromeDriver predefinito
+
+🔐 Navigazione alla pagina di login
+  • Reindirizzamento automatico alla home page
+    ◦ ✅ Navigazione completata: https://utilizzatori.day.it/day/it/home
+
+📄 Inizio scraping delle pagine
+  • Scraping pagina 1
+    ◦ ✅ Estratte 15 transazioni dalla pagina 1
+  • Scraping pagina 2
+    ◦ ✅ Estratte 12 transazioni dalla pagina 2
+
+✅ Scraping completato. Totale transazioni estratte: 27 da 2 pagine
+
+Inserisci il nome del file csv: ottobre_2024_upday
+📊 Transazioni salvate: 27
 🎉 Estrazione completata con successo!
 ```
+
+### Esempio Completo: Solo Conversione
+
+```bash
+$ ofxUpDay ottobre_2024_upday.csv output.ofx
+INFO: Conversion completed: (27 lines, 0 invest-lines) -
+```
+
+### Formati Date Supportati
+
+Il plugin riconosce automaticamente diversi formati di data:
+- `01/10/2024`, `1/10/24` (formato standard)
+- `01-10-2024`, `1-10-24` (con trattini)
+- `01.10.2024`, `1.10.24` (con punti)
 
 ## Risoluzione Problemi
 
@@ -174,6 +224,36 @@ Se il plugin non riesce a connettersi al sito UpDay:
 - Su macOS, potresti dover autorizzare ChromeDriver: `xattr -d com.apple.quarantine /path/to/chromedriver`
 - Controlla che non ci siano altri processi Chrome in esecuzione
 
+### Problemi con file CSV esistenti
+
+Se hai problemi nella conversione di file CSV già scaricati:
+
+- Verifica che il file CSV sia nel formato corretto (vedi sezione formato)
+- Assicurati che il file non sia corrotto o modificato manualmente
+- Prova a riscaricare i dati usando la modalità download automatico
+
+## Formato File CSV
+
+Il plugin genera e legge file CSV con questo formato:
+
+```csv
+data,ora,descrizione_operazione,tipo_operazione,numero_buoni,valore,luogo_utilizzo,indirizzo,codice_riferimento,pagina_origine
+01/10/2024,12:30,Utilizzo Buoni Pasto,usage,2,-11.00,CONAD SUPERSTORE,Via Roma 123,,-1
+03/10/2024,00:00,Accredito Buoni Pasto,credit,20,110.00,,,REF123456,1
+```
+
+**Colonne:**
+- `data`: Data della transazione (gg/mm/aaaa)
+- `ora`: Ora della transazione (hh:mm)
+- `descrizione_operazione`: Descrizione dal sito UpDay
+- `tipo_operazione`: `credit` (accredito) o `usage` (utilizzo)
+- `numero_buoni`: Numero di buoni coinvolti
+- `valore`: Importo in euro (positivo per accrediti, negativo per utilizzi)
+- `luogo_utilizzo`: Nome dell'esercente (solo per utilizzi)
+- `indirizzo`: Indirizzo dell'esercente (solo per utilizzi)
+- `codice_riferimento`: Codice di riferimento (solo per accrediti)
+- `pagina_origine`: Numero di pagina da cui è stata estratta
+
 ## Configurazione Avanzata
 
 ### Personalizzazione Account
@@ -197,7 +277,7 @@ ofxstatement convert -t upday movimento_upday.csv output.ofx
 ## Limitazioni Conosciute
 
 - **Limite temporale**: Il sito UpDay permette l'accesso solo agli ultimi 12 mesi di dati
-- **Dipendenza browser**: Richiede Google Chrome per il web scraping
+- **Dipendenza browser**: La modalità download automatico richiede Google Chrome
 - **Rate limiting**: Uso eccessivo potrebbe causare blocchi temporanei dal sito
 - **Cambio sito**: Aggiornamenti del sito UpDay potrebbero richiedere aggiornamenti del plugin
 
