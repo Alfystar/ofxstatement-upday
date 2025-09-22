@@ -106,8 +106,7 @@ def _get_date_from_user(info: str = "inizio", optional: bool = False) -> str:
 
 
 def _setup_browser():
-    # TODO: scegliere quale browser usare in base alla configurazione
-    """Configura e avvia il browser Chrome"""
+    """Configura e avvia il browser Chrome con strategie multiple di fallback"""
     print("Avvio del browser...")
 
     chrome_options = Options()
@@ -153,43 +152,122 @@ def _setup_browser():
     chrome_options.add_argument("--enable-logging")
     chrome_options.add_argument("--log-level=1")  # Riduco il livello di log
 
+    # STRATEGIA 1: Usa ChromeDriver predefinito di sistema (PRIORITÀ MASSIMA - più affidabile)
+    print("🔍 Tentativo 1: Uso ChromeDriver predefinito del sistema...")
     try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-
-        # Nascondi il fatto che stiamo usando webdriver
+        driver = webdriver.Chrome(options=chrome_options)
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
         driver.implicitly_wait(10)
-
-        # Rimuovo maximize_window() per mantenere dimensioni moderate
-        # driver.maximize_window()
-
-        print(f"Browser avviato correttamente. Finestra visibile: {not driver.get_window_size() is None}")
+        print(f"🎉 Browser avviato con successo usando ChromeDriver predefinito")
         return driver
-
     except Exception as e:
-        print(f"Errore nell'avvio del browser: {e}")
-        print("Tentativo con configurazione alternativa...")
+        print(f"❌ ChromeDriver predefinito non funziona: {e}")
 
+    # STRATEGIA 2: Cerca ChromeDriver già installato nel sistema
+    print("🔍 Tentativo 2: Ricerca ChromeDriver già installato nel sistema...")
+    system_chromedriver_paths = [
+        "chromedriver",  # PATH del sistema (prova prima questo)
+        "/opt/homebrew/bin/chromedriver",  # Homebrew Apple Silicon Mac
+        "/usr/local/bin/chromedriver",  # Homebrew Intel Mac
+        "/usr/bin/chromedriver",  # Sistema Linux/Mac
+    ]
+
+    for chromedriver_path in system_chromedriver_paths:
         try:
-            # Configurazione di fallback più semplice con finestra normale
-            simple_options = Options()
-            simple_options.add_argument("--disable-headless")
-            simple_options.add_argument("--no-sandbox")
-            simple_options.add_argument("--window-size=1200,800")
-            simple_options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            import shutil
+            # Verifica se il path esiste o è nel PATH
+            if chromedriver_path == "chromedriver":
+                actual_path = shutil.which("chromedriver")
+                if actual_path is None:
+                    continue
+                print(f"✅ Trovato ChromeDriver nel PATH: {actual_path}")
+            elif not os.path.exists(chromedriver_path):
+                continue
+            else:
+                print(f"✅ Trovato ChromeDriver in: {chromedriver_path}")
 
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=simple_options)
+            service = Service(chromedriver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             driver.implicitly_wait(10)
-            # Rimuovo maximize_window() anche dal fallback
-            # driver.maximize_window()
-
+            print(f"🎉 Browser avviato con successo usando ChromeDriver locale")
             return driver
-        except Exception as fallback_e:
-            _handle_fatal_error(None, f"Impossibile avviare Chrome. Assicurati che Chrome sia installato sul sistema", fallback_e)
+        except Exception as e:
+            print(f"❌ ChromeDriver {chromedriver_path} non funziona: {e}")
+            continue
+
+    # STRATEGIA 3: WebDriverManager come ULTIMA RISORSA (richiede connessione internet)
+    has_internet = _check_internet_connection()
+    if has_internet:
+        print("🌐 Tentativo 3: ChromeDriver non trovato localmente, provo il download automatico...")
+        print("⚠️  Questa operazione richiede connessione internet e potrebbe fallire per restrizioni di sistema")
+        try:
+            # Configura WebDriverManager per cache locale
+            service = Service(ChromeDriverManager(cache_valid_range=7).install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            driver.implicitly_wait(10)
+            print(f"🎉 Browser avviato con successo tramite download automatico")
+            print("💡 Suggerimento: Per evitare download futuri, installa ChromeDriver localmente")
+            return driver
+        except Exception as e:
+            print(f"❌ Download automatico fallito: {e}")
+    else:
+        print("🚫 Connessione internet non disponibile - salto il download automatico")
+
+    # Se tutti i tentativi falliscono, fornisci istruzioni dettagliate per l'installazione
+    error_message = """🚨 Impossibile avviare Chrome - ChromeDriver non trovato
+
+🔧 SOLUZIONI RACCOMANDATE:
+
+📋 REQUISITI:
+   • Google Chrome deve essere installato e aggiornato
+   • ChromeDriver deve essere compatibile con la versione di Chrome
+
+🛠️  INSTALLAZIONE ChromeDriver:
+
+   macOS (raccomandato):
+   ▶️  brew install chromedriver
+   ▶️  xattr -d com.apple.quarantine $(which chromedriver)
+
+   macOS alternativo:
+   ▶️  Scarica da https://chromedriver.chromium.org
+   ▶️  Estrai in /usr/local/bin/ e rendi eseguibile
+
+   Linux Ubuntu/Debian:
+   ▶️  sudo apt-get install chromium-chromedriver
+
+   Linux altre distro:
+   ▶️  Scarica da https://chromedriver.chromium.org
+   ▶️  Estrai in /usr/bin/ e rendi eseguibile
+
+   Windows:
+   ▶️  Scarica da https://chromedriver.chromium.org
+   ▶️  Aggiungi al PATH di sistema
+
+🔍 VERIFICA INSTALLAZIONE:
+   ▶️  Apri terminale e digita: chromedriver --version
+
+⚠️  POSSIBILI PROBLEMI:
+   • Versione Chrome non compatibile → Aggiorna Chrome
+   • Permessi insufficienti → Usa sudo per installazione
+   • Firewall aziendale → Installazione manuale richiesta
+   • macOS Gatekeeper → Esegui: xattr -d com.apple.quarantine /path/to/chromedriver
+
+💡 DOPO L'INSTALLAZIONE:
+   Il plugin funzionerà offline senza bisogno di connessione internet."""
+
+    _handle_fatal_error(None, error_message, Exception("Tutte le strategie di avvio del browser sono fallite"))
+
+
+def _check_internet_connection() -> bool:
+    """Verifica se c'è connessione internet disponibile"""
+    try:
+        import requests
+        response = requests.get("https://www.google.com", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
 
 
 def _wait_page_load(driver, href_click_url, destination_url, timeout: int = 120):

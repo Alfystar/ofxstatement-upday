@@ -20,243 +20,202 @@ UpDay è un'azienda italiana che si occupa della gestione di buoni pasto azienda
 
 Al momento UpDay non fornisce un sistema di esportazione diretta dei dati tramite file o API. Il web scraping è stato implementato come soluzione temporanea in attesa che l'azienda introduca metodi di esportazione più convenienti per gli utenti.
 
-## Requisiti
+## Requisiti di Sistema
 
-- Python 3.9 o superiore
-- Browser Google Chrome installato
-- Account UpDay attivo su day.it
-- Accesso internet per il web scraping
+### **Requisiti Obbligatori:**
+
+- **Python 3.9 o superiore**
+- **Google Chrome** installato e aggiornato all'ultima versione
+- **Account UpDay attivo** su day.it
+- **Connessione internet** per il web scraping
+
+### **Gestione ChromeDriver (Automatica):**
+
+Il plugin gestisce automaticamente ChromeDriver con una strategia intelligente:
+
+1. **🔍 Prima priorità**: Cerca ChromeDriver già installato localmente
+   - Homebrew (macOS): `/opt/homebrew/bin/chromedriver` o `/usr/local/bin/chromedriver`
+   - Sistema Linux: `/usr/bin/chromedriver`
+   - PATH di sistema: comando `chromedriver`
+
+2. **🌐 Fallback automatico**: Se ChromeDriver non è trovato localmente, tenta il download automatico
+   - ⚠️ **Richiede connessione internet**
+   - ⚠️ **Può fallire** per restrizioni di sistema, firewall aziendali, o politiche di sicurezza
+   - ✅ **Una volta scaricato**, viene memorizzato in cache per utilizzi futuri
+
+3. **🚨 Se il download automatico fallisce**: Il plugin fornisce istruzioni dettagliate per l'installazione manuale
+
+### **Quando l'installazione automatica può fallire:**
+
+- **Firewall aziendali** che bloccano il download
+- **Politiche di sicurezza** che impediscono l'esecuzione di binari scaricati
+- **Connessione internet assente** durante il primo utilizzo
+- **Permessi insufficienti** per scrivere nella cache
+- **Versioni di Chrome non supportate**
 
 ## Installazione
 
-### Da PyPI (raccomandato)
+### Installazione Semplice (Raccomandata)
 
 ```bash
 pip install ofxstatement-upday
 ```
 
-### Da sorgenti
+Questa installazione include tutte le dipendenze necessarie, incluso il sistema di gestione automatica di ChromeDriver.
+
+### Installazione ChromeDriver Manuale (Opzionale ma Raccomandata)
+
+Per evitare dipendenze dalla connessione internet e garantire massima affidabilità:
+
+#### macOS:
+```bash
+# Con Homebrew (raccomandato)
+brew install chromedriver
+
+# Verifica installazione
+chromedriver --version
+```
+
+#### Linux Ubuntu/Debian:
+```bash
+sudo apt-get update
+sudo apt-get install chromium-chromedriver
+
+# Verifica installazione
+chromedriver --version
+```
+
+#### Linux altre distribuzioni:
+```bash
+# Scarica ChromeDriver compatibile con la tua versione di Chrome
+wget https://chromedriver.chromium.org/downloads
+# Estrai e sposta in /usr/bin/
+sudo mv chromedriver /usr/bin/
+sudo chmod +x /usr/bin/chromedriver
+```
+
+#### Windows:
+1. Scarica ChromeDriver da https://chromedriver.chromium.org
+2. Estrai il file `chromedriver.exe`
+3. Aggiungi la cartella al PATH di sistema
+4. Verifica: apri cmd e digita `chromedriver --version`
+
+### Da sorgenti (per sviluppatori)
 
 ```bash
 git clone https://github.com/Alfystar/ofxstatement-upday.git
 cd ofxstatement-upday
-pip install build
-python3 -m build --sdist --wheel
-pip install dist/ofxstatement_upday-<version>.tar.gz  # sostituisci <version> con il numero di versione
+pip install -e .
 ```
-
-### Per sviluppatori (con pipenv)
-
-Se vuoi contribuire al progetto o modificare il codice:
-
-```bash
-git clone https://github.com/Alfystar/ofxstatement-upday.git
-cd ofxstatement-upday
-pip install pipenv
-pipenv install --dev
-pipenv shell
-```
-
-Questo comando:
-1. Crea un ambiente virtuale isolato
-2. Installa tutte le dipendenze di sviluppo dal `Pipfile`
-3. Installa il plugin in modalità sviluppo (editable mode)
-4. Attiva l'ambiente virtuale
-
-Per testare le modifiche durante lo sviluppo:
-
-```bash
-# Dentro l'ambiente pipenv
-ofxstatement list-plugins  # verifica che 'upday' sia presente
-ofxstatement convert -t upday test_file.csv output.ofx
-```
-
-Per uscire dall'ambiente virtuale:
-
-```bash
-exit
-```
-
-### Verifica installazione
-
-```bash
-ofxstatement list-plugins
-```
-
-Dovresti vedere 'upday' nella lista dei plugin disponibili.
-
-## Configurazione
-
-Per modificare il file di configurazione, esegui:
-
-```bash
-ofxstatement edit-config
-```
-
-Si aprirà un editor vim con la configurazione attuale. Aggiungi la configurazione del plugin:
-
-```ini
-[upday]
-plugin = upday
-account = UPDAY_BUONI_PASTO
-browser = chrome
-```
-
-### **Parametri di configurazione:**
-
-- `plugin`: Deve essere sempre "upday"
-- `account`: Nome dell'account per identificare le transazioni (default: UPDAY_BUONI_PASTO)
-- `browser`: Browser da utilizzare (attualmente supportato solo "chrome")
-
-> **Nota**: Puoi avere tutte le configurazioni che desideri, basta aggiungere una nuova sezione con la stessa struttura e cambiare il nome della sezione.
-
-## Come funziona il download
-
-Il processo di download automatico avviene in questi passaggi:
-
-1. **Avvio browser Chrome** in modalità visibile per gestire eventuali CAPTCHA
-2. **Login manuale** - L'utente deve effettuare il login nel browser
-3. **Navigazione automatica** alla sezione movimenti buoni pasto
-4. **Impostazione filtri** data con validazione del limite di 1 anno
-5. **Scraping multipagina** con estrazione di tutte le transazioni disponibili
-6. **Parsing HTML** delle tabelle generate dinamicamente via PHP
-7. **Salvataggio CSV** per backup e modifiche offline
-8. **Conversione OFX** per l'importazione in software di contabilità
-
-### **Note tecniche:**
-- Il sito genera le tabelle dinamicamente via PHP senza API REST
-- Durante il login potrebbe essere necessario risolvere un reCAPTCHA
-- Il sistema riconosce automaticamente quando si è sulla home page
-- La paginazione viene gestita automaticamente fino all'ultima pagina
 
 ## Utilizzo
 
-### **Estrazione automatica con web scraping:**
-
-Per scaricare automaticamente i dati dal sito UpDay:
+### Comando Base
 
 ```bash
-ofxstatement convert -t upday - output.ofx
+ofxUpDay - output.ofx
 ```
 
-Il plugin richiederà:
+Il plugin ti guiderà attraverso:
+1. **Inserimento date** di inizio e fine
+2. **Avvio automatico** del browser Chrome
+3. **Login manuale** sul sito UpDay (quando necessario)
+4. **Estrazione automatica** di tutte le transazioni
+5. **Salvataggio** in formato CSV e conversione OFX
 
-1. **Data di inizio**: Formato gg/mm/aaaa (max 1 anno fa)
-2. **Data di fine**: Opzionale, se vuota usa la data odierna
-3. **Nome file CSV**: Per salvare i dati estratti (opzionale)
-
-Il processo salverà automaticamente un file CSV e genererà il file OFX.
-
-### **Conversione da file CSV esistente:**
-
-Se hai già un file CSV da una precedente estrazione:
+### Esempio Completo
 
 ```bash
-ofxstatement convert -t upday estratto_upday.csv output.ofx
-```
-
-Questo permette di riprocessare i dati senza ripetere il web scraping.
-
-### **Esempio di utilizzo completo:**
-
-```bash
-$ ofxstatement convert -t upday - movimenti_settembre.ofx
-
+$ ofxUpDay - upday_settembre_2024.ofx
 Inserisci la data di inizio (formato gg/mm/aaaa): 01/09/2024
 Inserisci la data di fine [se vuoto, usa oggi]: 30/09/2024
-Inserisci il nome del file csv: settembre_2024
+Date selezionate: da '01/09/2024' a '30/09/2024'
 
-[... processo di web scraping ...]
+=== INIZIO SCRAPING UPDAY ===
+🔍 Tentativo 1: Ricerca ChromeDriver già installato nel sistema...
+✅ Trovato ChromeDriver in: /opt/homebrew/bin/chromedriver
+🎉 Browser avviato con successo usando ChromeDriver locale
 
-✅ File CSV salvato: settembre_2024.csv
-📄 File OFX generato: movimenti_settembre.ofx
+[... processo di scraping ...]
+
+✅ File CSV salvato con successo: settembre_upday.csv
+📊 Transazioni salvate: 42
+🎉 Estrazione completata con successo!
 ```
 
-### Aggiungere un alias
+## Risoluzione Problemi
 
-Per semplificare l'uso del plugin, si consiglia di aggiungere un alias al sistema aggiungendo questo comando al file *.bash_aliases*:
+### Errore "ChromeDriver non trovato"
+
+Se vedi questo errore, il plugin non è riuscito a trovare o scaricare ChromeDriver:
+
+```
+🚨 Impossibile avviare Chrome - ChromeDriver non trovato
+```
+
+**Soluzioni in ordine di priorità:**
+
+1. **Installa ChromeDriver manualmente** (vedi sezione installazione sopra)
+2. **Verifica che Chrome sia aggiornato**: Menu → Aiuto → Informazioni su Google Chrome
+3. **Controlla la connessione internet** per il download automatico
+4. **Se sei in ambiente aziendale**: Chiedi all'IT di installare ChromeDriver o sbloccare i download
+
+### Errore di connessione al sito
+
+Se il plugin non riesce a connettersi al sito UpDay:
+
+- Verifica che il sito utilizzatori.day.it sia accessibile dal tuo browser
+- Controlla eventuali VPN o proxy che potrebbero interferire
+- Riprova più tardi se il sito è temporaneamente non disponibile
+
+### Browser che si chiude improvvisamente
+
+- Assicurati di avere l'ultima versione di Chrome installata
+- Su macOS, potresti dover autorizzare ChromeDriver: `xattr -d com.apple.quarantine /path/to/chromedriver`
+- Controlla che non ci siano altri processi Chrome in esecuzione
+
+## Configurazione Avanzata
+
+### Personalizzazione Account
+
+Crea un file di configurazione per evitare di inserire l'account ogni volta:
+
+```ini
+# ~/.config/ofxstatement/upday.conf
+[upday]
+default_account = 1234567890
+charset = UTF-8
+```
+
+### Utilizzo in Script
 
 ```bash
-printf '\n# UpDay CSV convert to OFX format\nalias ofxUpday="ofxstatement convert -t upday"\n' >> ~/.bash_aliases
+# Per automazione, usa file CSV esistenti
+ofxstatement convert -t upday movimento_upday.csv output.ofx
 ```
 
-Dopo aver ricaricato il terminale, l'utilizzo diventa:
+## Limitazioni Conosciute
 
-```bash
-ofxUpday estratto_upday.csv upday.ofx
-```
+- **Limite temporale**: Il sito UpDay permette l'accesso solo agli ultimi 12 mesi di dati
+- **Dipendenza browser**: Richiede Google Chrome per il web scraping
+- **Rate limiting**: Uso eccessivo potrebbe causare blocchi temporanei dal sito
+- **Cambio sito**: Aggiornamenti del sito UpDay potrebbero richiedere aggiornamenti del plugin
 
-**Nota**: Se dopo il ricaricamento gli alias non vengono caricati, verifica che nel tuo *.bashrc* siano presenti le seguenti righe:
+## Privacy e Sicurezza
 
-```bash
-# Alias definitions.
-if [ -f ~/.bash_aliases ]; then
-    . ~/.bash_aliases
-fi
-```
-
-## Formato dati
-
-Il file CSV intermedio contiene le seguenti colonne:
-
-- `data`: Data della transazione (gg/mm/aaaa)
-- `ora`: Ora della transazione (hh:mm)
-- `descrizione_operazione`: Tipo operazione (Accredito/Utilizzo Buoni)
-- `tipo_operazione`: credit/usage
-- `numero_buoni`: Numero di buoni utilizzati/accreditati
-- `valore`: Importo in euro (positivo per accrediti, negativo per utilizzi)
-- `luogo_utilizzo`: Nome dell'esercente (per gli utilizzi)
-- `indirizzo`: Indirizzo dell'esercente (per gli utilizzi)
-- `codice_riferimento`: Codice della ricarica (per gli accrediti)
-- `pagina_origine`: Numero di pagina da cui è stata estratta la transazione
-
-### **Esempi di memo nel file OFX:**
-
-**Accrediti:**
-- `Buoni pasto assegnati per il mese di Luglio (+21) - Cod.Rif: 0001358807`
-
-**Utilizzi:**
-- `Spesa al Ipertriscount - 8 buoni pasto - (V. ENRICO FERRI 8 - 00173 ROMA) - ore 19:27`
-- `Spesa al Carrefour - 2 buoni pasto - (V.LE LUIGI SCHIAVONETTI 420/426/432 - 00173 ROMA)`
-
-## Risoluzione problemi
-
-### **Errore "Data di inizio non valida"**
-
-Il sito UpDay permette di accedere solo ai dati dell'ultimo anno. Verifica che la data di inizio non sia anteriore a 365 giorni fa.
-
-### **Errore durante il login**
-
-1. Assicurati che Chrome sia installato e aggiornato
-2. Effettua il login manualmente quando richiesto
-3. Risolvi eventuali CAPTCHA che potrebbero apparire
-4. Attendi di essere sulla home page prima di premere INVIO
-
-### **Browser si chiude inaspettatamente**
-
-Questo può accadere durante la paginazione. Il plugin gestisce automaticamente gli errori "stale element reference" riprovando la navigazione.
-
-### **Nessuna transazione trovata**
-
-Verifica che ci siano effettivamente delle transazioni nel periodo selezionato accedendo manualmente al sito.
-
-## Limitazioni
-
-- Supporta solo browser Chrome/Chromium
-- Richiede login manuale per motivi di sicurezza
-- Limitato ai dati dell'ultimo anno (limitazione del sito UpDay)
-- Dipende dalla struttura HTML del sito (potrebbe rompersi con aggiornamenti)
+- **Nessuna memorizzazione credenziali**: Il plugin non salva username o password
+- **Solo lettura**: Accede solo in lettura ai dati delle transazioni
+- **Locale**: Tutti i dati vengono elaborati localmente sul tuo computer
+- **Open source**: Il codice è ispezionabile su GitHub
 
 ## Contributi
 
-Contributi, segnalazioni di bug e richieste di funzionalità sono benvenuti. Per favore apri un issue o invia una pull request.
+I contributi sono benvenuti! Per segnalare bug o proporre miglioramenti:
+
+1. Apri una [issue](https://github.com/Alfystar/ofxstatement-upday/issues) su GitHub
+2. Fork del repository e pull request per le modifiche
+3. Segnala problemi con il sito UpDay per aggiornamenti necessari
 
 ## Licenza
 
-Questo plugin è rilasciato sotto licenza GPL v3. Vedi il file LICENSE per i dettagli.
-
-## Disclaimer
-
-Questo plugin è un progetto indipendente e non è affiliato con UpDay S.p.A. È stato creato per facilitare la gestione dei propri dati personali e non ha scopi commerciali.
-
-L'utilizzo avviene a proprio rischio. Gli autori non sono responsabili per eventuali problemi derivanti dall'uso del plugin.
+Questo progetto è distribuito sotto licenza GPLv3. Vedi il file `LICENSE` per i dettagli.

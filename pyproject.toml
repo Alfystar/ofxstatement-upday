@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ofxstatement-upday"
-version = "1.0.0-1"
+version = "1.0.1"
 description = "Plugin per ofxstatement per importare transazioni buoni pasto UpDay"
 authors = [
   { name="Alfystar", email="alfystar1701@gmail.com" },
@@ -29,10 +29,22 @@ classifiers = [
 requires-python = ">=3.9"
 dependencies = [
     "ofxstatement",
-    "selenium>=4.0.0",
-    "beautifulsoup4>=4.9.0",
-    "webdriver-manager>=3.8.0"
+    "selenium>=4.15.0",
+    "beautifulsoup4>=4.12.0",
+    "webdriver-manager>=4.0.0",
+    "requests>=2.28.0"
 ]
+
+# Dipendenze opzionali per installazioni specifiche
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0"
+]
+# Per sistemi che preferiscono gestire ChromeDriver manualmente
+system-chromedriver = []
 
 [project.urls]
 Homepage = "https://github.com/Alfystar/ofxstatement-upday"
