@@ -106,9 +106,8 @@ def _get_date_from_user(info: str = "inizio", optional: bool = False) -> str:
 
 
 def _setup_browser():
-    # TODO: scegliere quale browser usare in base alla configurazione
-    """Configura e avvia il browser Chrome"""
-    print("Avvio del browser...")
+    """Configura e avvia il browser Chrome con strategie multiple di fallback"""
+    _log_section("🚀 Avvio del browser...")
 
     chrome_options = Options()
 
@@ -153,43 +152,122 @@ def _setup_browser():
     chrome_options.add_argument("--enable-logging")
     chrome_options.add_argument("--log-level=1")  # Riduco il livello di log
 
+    # STRATEGIA 1: Usa ChromeDriver predefinito di sistema (PRIORITÀ MASSIMA - più affidabile)
+    _log_step("🔍 Tentativo 1: Uso ChromeDriver predefinito di sistema")
     try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-
-        # Nascondi il fatto che stiamo usando webdriver
+        driver = webdriver.Chrome(options=chrome_options)
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
         driver.implicitly_wait(10)
-
-        # Rimuovo maximize_window() per mantenere dimensioni moderate
-        # driver.maximize_window()
-
-        print(f"Browser avviato correttamente. Finestra visibile: {not driver.get_window_size() is None}")
+        _log_substep("🎉 Browser avviato con successo usando ChromeDriver predefinito")
         return driver
-
     except Exception as e:
-        print(f"Errore nell'avvio del browser: {e}")
-        print("Tentativo con configurazione alternativa...")
+        _log_substep(f"❌ ChromeDriver predefinito non funziona: {e}")
 
+    # STRATEGIA 2: Cerca ChromeDriver già installato nel sistema
+    _log_step("🔍 Tentativo 2: Ricerca ChromeDriver già installato nel sistema")
+    system_chromedriver_paths = [
+        "chromedriver",  # PATH del sistema (prova prima questo)
+        "/opt/homebrew/bin/chromedriver",  # Homebrew Apple Silicon Mac
+        "/usr/local/bin/chromedriver",  # Homebrew Intel Mac
+        "/usr/bin/chromedriver",  # Sistema Linux/Mac
+    ]
+
+    for chromedriver_path in system_chromedriver_paths:
         try:
-            # Configurazione di fallback più semplice con finestra normale
-            simple_options = Options()
-            simple_options.add_argument("--disable-headless")
-            simple_options.add_argument("--no-sandbox")
-            simple_options.add_argument("--window-size=1200,800")
-            simple_options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            import shutil
+            # Verifica se il path esiste o è nel PATH
+            if chromedriver_path == "chromedriver":
+                actual_path = shutil.which("chromedriver")
+                if actual_path is None:
+                    continue
+                _log_substep(f"✅ Trovato ChromeDriver nel PATH: {actual_path}")
+            elif not os.path.exists(chromedriver_path):
+                continue
+            else:
+                _log_substep(f"✅ Trovato ChromeDriver in: {chromedriver_path}")
 
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=simple_options)
+            service = Service(chromedriver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             driver.implicitly_wait(10)
-            # Rimuovo maximize_window() anche dal fallback
-            # driver.maximize_window()
-
+            _log_substep("🎉 Browser avviato con successo usando ChromeDriver locale")
             return driver
-        except Exception as fallback_e:
-            _handle_fatal_error(None, f"Impossibile avviare Chrome. Assicurati che Chrome sia installato sul sistema", fallback_e)
+        except Exception as e:
+            _log_substep(f"❌ ChromeDriver {chromedriver_path} non funziona: {e}")
+            continue
+
+    # STRATEGIA 3: WebDriverManager come ULTIMA RISORSA (richiede connessione internet)
+    has_internet = _check_internet_connection()
+    if has_internet:
+        _log_step("🌐 Tentativo 3: ChromeDriver non trovato localmente, provo il download automatico")
+        _log_substep("⚠️  Questa operazione richiede connessione internet e potrebbe fallire per restrizioni di sistema")
+        try:
+            # Configura WebDriverManager per cache locale
+            service = Service(ChromeDriverManager(cache_valid_range=7).install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            driver.implicitly_wait(10)
+            _log_substep("🎉 Browser avviato con successo tramite download automatico")
+            _log_detail("💡 Suggerimento: Per evitare download futuri, installa ChromeDriver localmente")
+            return driver
+        except Exception as e:
+            _log_substep(f"❌ Download automatico fallito: {e}")
+    else:
+        _log_step("🚫 Connessione internet non disponibile - salto il download automatico")
+
+    # Se tutti i tentativi falliscono, fornisci istruzioni dettagliate per l'installazione
+    error_message = """🚨 Impossibile avviare Chrome - ChromeDriver non trovato
+
+🔧 SOLUZIONI RACCOMANDATE:
+
+📋 REQUISITI:
+   • Google Chrome deve essere installato e aggiornato
+   • ChromeDriver deve essere compatibile con la versione di Chrome
+
+🛠️  INSTALLAZIONE ChromeDriver:
+
+   macOS (raccomandato):
+   ▶️  brew install chromedriver
+   ▶️  xattr -d com.apple.quarantine $(which chromedriver)
+
+   macOS alternativo:
+   ▶️  Scarica da https://chromedriver.chromium.org
+   ▶️  Estrai in /usr/local/bin/ e rendi eseguibile
+
+   Linux Ubuntu/Debian:
+   ▶️  sudo apt-get install chromium-chromedriver
+
+   Linux altre distro:
+   ▶️  Scarica da https://chromedriver.chromium.org
+   ▶️  Estrai in /usr/bin/ e rendi eseguibile
+
+   Windows:
+   ▶️  Scarica da https://chromedriver.chromium.org
+   ▶️  Aggiungi al PATH di sistema
+
+🔍 VERIFICA INSTALLAZIONE:
+   ▶️  Apri terminale e digita: chromedriver --version
+
+⚠️  POSSIBILI PROBLEMI:
+   • Versione Chrome non compatibile → Aggiorna Chrome
+   • Permessi insufficienti → Usa sudo per installazione
+   • Firewall aziendale → Installazione manuale richiesta
+   • macOS Gatekeeper → Esegui: xattr -d com.apple.quarantine /path/to/chromedriver
+
+💡 DOPO L'INSTALLAZIONE:
+   Il plugin funzionerà offline senza bisogno di connessione internet."""
+
+    _handle_fatal_error(None, error_message, Exception("Tutte le strategie di avvio del browser sono fallite"))
+
+
+def _check_internet_connection() -> bool:
+    """Verifica se c'è connessione internet disponibile"""
+    try:
+        import requests
+        response = requests.get("https://www.google.com", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
 
 
 def _wait_page_load(driver, href_click_url, destination_url, timeout: int = 120):
@@ -205,7 +283,7 @@ def _wait_page_load(driver, href_click_url, destination_url, timeout: int = 120)
 
 def _navigate_to_login(driver):
     """Naviga alla pagina di login e clicca sul pulsante evidenziato"""
-    print("Navigazione alla pagina di login...")
+    _log_section("🔐 Navigazione alla pagina di login")
 
     login_url = "https://www.day.it/login-utilizzatori#:~:text=Accesso%20piattaforma%20unica%20per%20Buoni%20Pasto%2C%20Piattaforma%20Welfare%20e%20Buoni%20Acquisto%20Cadhoc%C2%A0"
     driver.get(login_url)
@@ -218,14 +296,15 @@ def _navigate_to_login(driver):
         # Forza la navigazione nello stesso tab usando JavaScript
         target_url = login_link.get_attribute('href')
         try:
+            _log_step("Reindirizzamento automatico alla home page")
             _wait_page_load(driver, target_url, "https://utilizzatori.day.it/day/it/home", timeout=120)
         except Exception as e:
             _handle_fatal_error(driver, "Timeout nel login automatico - il sito potrebbe essere lento o non raggiungibile", e)
-        print(f"Navigazione completata: {driver.current_url}")
+        _log_substep(f"✅ Navigazione completata: {driver.current_url}")
         return
 
     except Exception as e:
-        print("Pulsante di login non trovato automaticamente. Procedi manualmente.")
+        _log_step("⚠️  Pulsante di login non trovato automaticamente. Procedi manualmente.")
         raise ReferenceError("Pulsante di login non trovato") from e
 
 
@@ -244,7 +323,7 @@ def _wait_for_manual_login(driver):
 
 def _navigate_to_movements(driver):
     """Naviga alla pagina dei movimenti"""
-    print("Navigazione alla pagina dei movimenti...")
+    _log_section("📊 Navigazione alla pagina dei movimenti")
 
     movements_url = "https://utilizzatori.day.it/day/it/pausa-pranzo/monitora/movimenti"
     driver.get(movements_url)
@@ -252,6 +331,7 @@ def _navigate_to_movements(driver):
     # Attendi che la pagina si carichi completamente
     try:
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        _log_step("✅ Pagina caricata correttamente")
     except Exception as e:
         _handle_fatal_error(driver, "La pagina dei movimenti non si è caricata correttamente", e)
 
@@ -261,78 +341,80 @@ def _navigate_to_movements(driver):
 
 def _set_date_filter(driver, start_date: str, end_date: str = None):
     """Imposta il filtro data e avvia la ricerca"""
-    print(f"Impostazione filtro data: da {start_date} a {end_date if end_date else 'oggi'}")
+    _log_section(f"🗓️  Impostazione filtro data: da {start_date} a {end_date if end_date else 'oggi'}")
 
     try:
         # Campo data di inizio - selettore specifico per dataDa
+        _log_step("Ricerca e compilazione campo data di inizio")
         start_date_field = None
         try:
             start_date_field = driver.find_element(By.ID, "dataDa")
-            print("Campo data di inizio trovato con ID 'dataDa'")
+            _log_substep("Campo data di inizio trovato con ID 'dataDa'")
         except:
             try:
                 start_date_field = driver.find_element(By.CSS_SELECTOR, "input[name='dataDa']")
-                print("Campo data di inizio trovato con name 'dataDa'")
+                _log_substep("Campo data di inizio trovato con name 'dataDa'")
             except:
-                print("Campo data di inizio non trovato")
+                _log_substep("❌ Campo data di inizio non trovato")
 
         if start_date_field:
             start_date_field.clear()
             start_date_field.send_keys(start_date)
-            print(f"Data di inizio impostata: {start_date}")
+            _log_substep(f"✅ Data di inizio impostata: {start_date}")
         else:
-            print("ERRORE: Campo data di inizio non trovato!")
-            return False
+            _handle_fatal_error(driver, "Campo data di inizio non trovato!")
 
         # Campo data di fine - selettore specifico per dataA (opzionale)
         if end_date:
+            _log_step("Ricerca e compilazione campo data di fine")
             end_date_field = None
             try:
                 end_date_field = driver.find_element(By.ID, "dataA")
-                print("Campo data di fine trovato con ID 'dataA'")
+                _log_substep("Campo data di fine trovato con ID 'dataA'")
             except:
                 try:
                     end_date_field = driver.find_element(By.CSS_SELECTOR, "input[name='dataA']")
-                    print("Campo data di fine trovato con name 'dataA'")
+                    _log_substep("Campo data di fine trovato con name 'dataA'")
                 except:
-                    print("Campo data di fine non trovato")
+                    _log_substep("Campo data di fine non trovato")
 
             if end_date_field:
                 end_date_field.clear()
                 end_date_field.send_keys(end_date)
-                print(f"Data di fine impostata: {end_date}")
+                _log_substep(f"✅ Data di fine impostata: {end_date}")
             else:
-                print("ATTENZIONE: Campo data di fine non trovato, ma continuo...")
+                _log_substep("⚠️  Campo data di fine non trovato, ma continuo...")
         else:
-            print("Data di fine non specificata, verrà usata la data odierna automaticamente")
+            _log_step("Data di fine non specificata, verrà usata la data odierna automaticamente")
 
         # Pulsante di ricerca - selettore specifico per btnNext
+        _log_step("Ricerca e click del pulsante CERCA")
         search_button = None
         try:
             search_button = driver.find_element(By.ID, "btnNext")
-            print("Pulsante di ricerca trovato con ID 'btnNext'")
+            _log_substep("Pulsante di ricerca trovato con ID 'btnNext'")
         except:
             try:
                 search_button = driver.find_element(By.CSS_SELECTOR, "input[name='btnNext']")
-                print("Pulsante di ricerca trovato con name 'btnNext'")
+                _log_substep("Pulsante di ricerca trovato con name 'btnNext'")
             except:
                 try:
                     search_button = driver.find_element(By.CSS_SELECTOR, "input[value='CERCA']")
-                    print("Pulsante di ricerca trovato con value 'CERCA'")
+                    _log_substep("Pulsante di ricerca trovato con value 'CERCA'")
                 except:
-                    print("Pulsante di ricerca non trovato")
+                    _log_substep("❌ Pulsante di ricerca non trovato")
 
         if search_button:
             search_button.click()
-            print("Pulsante CERCA cliccato")
+            _log_substep("✅ Pulsante CERCA cliccato")
 
             # Attendi che la pagina si ricarichi e i risultati appaiano
-            print("Attendo il caricamento dei risultati...")
-            # time.sleep(5)
+            _log_substep("⏳ Attendo il caricamento dei risultati...")
 
             # Verifica che la tabella dei risultati sia presente
             try:
                 WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".wrap-table table.table tbody")))
+                _log_substep("✅ Risultati caricati correttamente")
                 return
             except:
                 _handle_fatal_error(driver, "I risultati non sono stati caricati correttamente dopo la ricerca")
@@ -345,13 +427,13 @@ def _set_date_filter(driver, start_date: str, end_date: str = None):
 
 def _scrape_all_pages(driver) -> List[Dict[str, Any]]:
     """Esegue lo scraping di tutte le pagine dei risultati"""
-    print("Inizio scraping delle pagine...")
+    _log_section("📄 Inizio scraping delle pagine")
 
     all_transactions = []
     page_number = 1
 
     while True:
-        print(f"Scraping pagina {page_number}...")
+        _log_step(f"Scraping pagina {page_number}")
 
         # Estrai i dati della tabella della pagina corrente
         table_html = _extract_table_html(driver)
@@ -364,7 +446,7 @@ def _scrape_all_pages(driver) -> List[Dict[str, Any]]:
                 transaction['pagina_origine'] = page_number
 
             all_transactions.extend(page_transactions)
-            print(f"Estratte {len(page_transactions)} transazioni dalla pagina {page_number}")
+            _log_substep(f"✅ Estratte {len(page_transactions)} transazioni dalla pagina {page_number}")
 
         # Controlla se ci sono altre pagine
         if not _go_to_next_page(driver):
@@ -372,23 +454,22 @@ def _scrape_all_pages(driver) -> List[Dict[str, Any]]:
 
         page_number += 1
 
-    print(f"Scraping completato. Totale transazioni estratte: {len(all_transactions)} da {page_number} pagine")
+    _log_section(f"✅ Scraping completato. Totale transazioni estratte: {len(all_transactions)} da {page_number} pagine")
 
     # Stampa un riepilogo delle transazioni per debug
     if all_transactions:
-        print("\n=== RIEPILOGO TRANSAZIONI ===")
+        _log_section("📊 RIEPILOGO TRANSAZIONI")
         credits = [t for t in all_transactions if t['tipo_operazione'] == 'credit']
         usages = [t for t in all_transactions if t['tipo_operazione'] == 'usage']
 
-        print(f"Accrediti: {len(credits)}")
-        print(f"Utilizzi: {len(usages)}")
+        _log_step(f"Accrediti: {len(credits)}")
+        _log_step(f"Utilizzi: {len(usages)}")
 
         total_credits = sum(t['valore'] for t in credits)
         total_usage = sum(abs(t['valore']) for t in usages)
 
-        print(f"Totale accreditato: +{total_credits:.2f}€")
-        print(f"Totale utilizzato: -{total_usage:.2f}€")
-        print("=" * 30)
+        _log_step(f"Totale accreditato: +{total_credits:.2f}€")
+        _log_step(f"Totale utilizzato: -{total_usage:.2f}€")
 
     return all_transactions
 
@@ -456,9 +537,9 @@ def _go_to_next_page(driver) -> bool:
         try:
             current_active = driver.find_element(By.CSS_SELECTOR, "#pg_page li.item.active a")
             current_page_number = current_active.text.strip()
-            print(f"Pagina corrente: {current_page_number}")
+            _log_substep(f"Pagina corrente: {current_page_number}")
         except:
-            print("⚠️  Non riesco a determinare la pagina corrente")
+            _log_substep("⚠️  Non riesco a determinare la pagina corrente")
 
         # Cerca la paginazione con id pg_page
         pagination = driver.find_element(By.ID, "pg_page")
@@ -467,7 +548,7 @@ def _go_to_next_page(driver) -> bool:
         items = pagination.find_elements(By.CSS_SELECTOR, "li.item")
 
         if not items:
-            print("Nessun elemento di paginazione trovato")
+            _log_substep("Nessun elemento di paginazione trovato")
             return False
 
         # Trova l'elemento attivo
@@ -481,7 +562,7 @@ def _go_to_next_page(driver) -> bool:
                 break
 
         if active_item is None:
-            print("⚠️  Elemento di paginazione attivo non trovato")
+            _log_substep("⚠️  Elemento di paginazione attivo non trovato")
             return False
 
         # Controlla se esiste un elemento successivo
@@ -494,29 +575,29 @@ def _go_to_next_page(driver) -> bool:
                 next_page_number_text = next_link.text.strip()
                 next_page_url = next_link.get_attribute('href')
 
-                print(f"Navigazione alla pagina successiva: {next_page_number_text}")
+                _log_substep(f"Navigazione alla pagina successiva: {next_page_number_text}")
 
                 # Strategia 1: Prova con il click normale
                 try:
                     next_link.click()
                 except Exception as click_e:
-                    print(f"Click normale fallito: {click_e}")
+                    _log_detail(f"Click normale fallito: {click_e}")
                     # Strategia 2: Usa JavaScript per il click
                     try:
                         driver.execute_script("arguments[0].click();", next_link)
-                        print("Click JavaScript riuscito")
+                        _log_detail("Click JavaScript riuscito")
                     except Exception as js_e:
-                        print(f"Click JavaScript fallito: {js_e}")
+                        _log_detail(f"Click JavaScript fallito: {js_e}")
                         # Strategia 3: Naviga direttamente con l'URL
                         if next_page_url:
-                            print(f"Navigazione diretta all'URL: {next_page_url}")
+                            _log_detail(f"Navigazione diretta all'URL: {next_page_url}")
                             driver.get(next_page_url)
                         else:
-                            print("❌ Tutte le strategie di click fallite")
+                            _log_detail("❌ Tutte le strategie di click fallite")
                             return False
 
                 # Attendi che la pagina si carichi con una strategia più robusta
-                print("⏳ Attendo il caricamento della pagina successiva...")
+                _log_substep("⏳ Attendo il caricamento della pagina successiva...")
 
                 # Strategia di attesa più robusta
                 max_attempts = 3
@@ -538,20 +619,20 @@ def _go_to_next_page(driver) -> bool:
                             new_page_number = new_active.text.strip()
 
                             if new_page_number == next_page_number_text:
-                                print(f"✅ Navigazione riuscita alla pagina {new_page_number}")
+                                _log_substep(f"✅ Navigazione riuscita alla pagina {new_page_number}")
                                 return True
                             elif new_page_number != current_page_number:
-                                print(f"✅ Pagina cambiata da {current_page_number} a {new_page_number}")
+                                _log_substep(f"✅ Pagina cambiata da {current_page_number} a {new_page_number}")
                                 return True
                             else:
-                                print(f"⚠️  Tentativo {attempt + 1}: Pagina non cambiata, riprovo...")
+                                _log_detail(f"⚠️  Tentativo {attempt + 1}: Pagina non cambiata, riprovo...")
                                 if attempt < max_attempts - 1:
                                     import time
                                     time.sleep(1)
                                     continue
 
                         except Exception as verify_e:
-                            print(f"⚠️  Tentativo {attempt + 1}: Errore nella verifica: {verify_e}")
+                            _log_detail(f"⚠️  Tentativo {attempt + 1}: Errore nella verifica: {verify_e}")
                             if attempt < max_attempts - 1:
                                 import time
                                 time.sleep(1)
@@ -560,26 +641,26 @@ def _go_to_next_page(driver) -> bool:
                         break
 
                     except Exception as wait_e:
-                        print(f"⚠️  Tentativo {attempt + 1}: Timeout nell'attesa: {wait_e}")
+                        _log_detail(f"⚠️  Tentativo {attempt + 1}: Timeout nell'attesa: {wait_e}")
                         if attempt < max_attempts - 1:
                             import time
                             time.sleep(2)
                             continue
                         else:
-                            print("❌ Timeout definitivo nel caricamento della pagina")
+                            _log_detail("❌ Timeout definitivo nel caricamento della pagina")
                             return False
 
                 return True
 
             except Exception as e:
-                print(f"⚠️  Errore nella ricerca del link successivo: {e}")
+                _log_substep(f"⚠️  Errore nella ricerca del link successivo: {e}")
                 return False
         else:
-            print("✅ Nessuna pagina successiva disponibile (fine paginazione)")
+            _log_substep("✅ Nessuna pagina successiva disponibile (fine paginazione)")
             return False
 
     except Exception as e:
-        print(f"❌ Errore generale nella navigazione alla pagina successiva: {e}")
+        _log_substep(f"❌ Errore generale nella navigazione alla pagina successiva: {e}")
         return False
 
 
@@ -760,14 +841,14 @@ def _parse_transactions_from_html(html_content: str) -> List[Dict[str, Any]]:
 def _handle_cookie_banner(driver):
     """Gestisce il banner dei cookie cliccando su 'Usa solo i cookie necessari'"""
     try:
-        print("Controllo presenza banner cookie...")
+        _log_step("🍪 Controllo presenza banner cookie")
 
         # Cerca il pulsante "Usa solo i cookie necessari"
         cookie_button = WebDriverWait(driver, 5).until(
             EC.element_to_be_clickable((By.ID, "CybotCookiebotDialogBodyButtonDecline"))
         )
 
-        print("Banner cookie trovato, clicco su 'Usa solo i cookie necessari'")
+        _log_substep("Banner cookie trovato, clicco su 'Usa solo i cookie necessari'")
         cookie_button.click()
 
         # Attendi che il banner scompaia
@@ -775,11 +856,11 @@ def _handle_cookie_banner(driver):
             EC.invisibility_of_element_located((By.ID, "CybotCookiebotDialogBodyButtonDecline"))
         )
 
-        print("Banner cookie chiuso con successo")
+        _log_substep("✅ Banner cookie chiuso con successo")
         return True
 
     except Exception as e:
-        print(f"Banner cookie non trovato o già gestito: {e}")
+        _log_substep("Banner cookie non trovato o già gestito")
         return False
 
 
@@ -1078,3 +1159,50 @@ class UpDayParser(CsvStatementParser):
             stmt_line.trntype = 'OTHER'
 
         return stmt_line
+
+
+# Logging utilities for structured output
+_log_indent_level = 0
+
+
+def _log(message: str, level: int = 0):
+    """
+    Log strutturato con indentazione
+
+    Args:
+        message: Messaggio da stampare
+        level: Livello di indentazione (0=titolo, 1=punto, 2=sottopunto, ecc.)
+    """
+    global _log_indent_level
+
+    if level == 0:
+        # Titolo principale - nessuna indentazione
+        print(message)
+        _log_indent_level = 0
+    else:
+        # Punti indentati
+        indent = "  " * level
+        if level == 1:
+            print(f"{indent}• {message}")
+        else:
+            print(f"{indent}◦ {message}")
+
+
+def _log_section(title: str):
+    """Log di una sezione principale"""
+    _log(title, 0)
+
+
+def _log_step(message: str):
+    """Log di un passo principale"""
+    _log(message, 1)
+
+
+def _log_substep(message: str):
+    """Log di un sottopasso"""
+    _log(message, 2)
+
+
+def _log_detail(message: str):
+    """Log di un dettaglio"""
+    _log(message, 3)
