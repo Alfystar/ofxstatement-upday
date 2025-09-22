@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ofxstatement-upday"
-version = "1.0.1"
+version = "1.0.1-1"
 description = "Plugin per ofxstatement per importare transazioni buoni pasto UpDay"
 authors = [
   { name="Alfystar", email="alfystar1701@gmail.com" },

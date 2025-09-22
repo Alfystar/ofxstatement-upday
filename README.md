@@ -76,7 +76,7 @@ Si aprirà un editor vim con la configurazione attuale. Aggiungi la configurazio
 ```ini
 [upday-config]
 plugin = upday
-account = UPDAY_BUONI_PASTO
+default_account = UPDAY_BUONI_PASTO
 browser = chrome
 ```
 
