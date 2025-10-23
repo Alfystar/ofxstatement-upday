@@ -567,18 +567,23 @@ def _extract_table_html(driver) -> str:
 def _go_to_next_page(driver) -> bool:
     """Controlla se esiste una pagina successiva e ci naviga"""
     try:
-        # Salva il numero della pagina corrente prima di fare qualsiasi operazione
-        current_page_number = None
+        # PRIMA verifica rapida se esiste la paginazione
+        # Se non esiste, significa che c'è una sola pagina - esci subito
+        # Usa un timeout esplicito molto breve per evitare attese inutili
         try:
-            current_active = driver.find_element(By.CSS_SELECTOR, "#pg_page li.item.active a")
-            current_page_number = current_active.text.strip()
-            _log_substep(f"Pagina corrente: {current_page_number}")
+            # Disabilita temporaneamente l'implicit_wait per questa ricerca, così da non aspettare troppo
+            driver.implicitly_wait(0)
+            pagination = WebDriverWait(driver, 0.5).until(EC.presence_of_element_located((By.ID, "pg_page")))
         except:
-            _log_substep("⚠️  Non riesco a determinare la pagina corrente")
+            _log_substep("✅ Nessuna paginazione trovata (unica pagina di risultati)")
+            # Ripristina l'implicit wait originale
+            driver.implicitly_wait(10)
+            return False
+        finally:
+            # Assicurati di ripristinare l'implicit_wait anche in caso di successo
+            driver.implicitly_wait(10)
 
-        # Cerca la paginazione con id pg_page
-        pagination = driver.find_element(By.ID, "pg_page")
-
+        # Solo se esiste la paginazione, procedi con il resto
         # Trova tutti gli elementi li con classe item
         items = pagination.find_elements(By.CSS_SELECTOR, "li.item")
 
@@ -589,12 +594,22 @@ def _go_to_next_page(driver) -> bool:
         # Trova l'elemento attivo
         active_item = None
         active_index = -1
+        current_page_number = None
 
         for i, item in enumerate(items):
             if "active" in item.get_attribute("class"):
                 active_item = item
                 active_index = i
+                # Cerca anche il numero di pagina corrente
+                try:
+                    link = item.find_element(By.TAG_NAME, "a")
+                    current_page_number = link.text.strip()
+                except:
+                    pass
                 break
+
+        if current_page_number:
+            _log_substep(f"Pagina corrente: {current_page_number}")
 
         if active_item is None:
             _log_substep("⚠️  Elemento di paginazione attivo non trovato")
@@ -695,7 +710,7 @@ def _go_to_next_page(driver) -> bool:
             return False
 
     except Exception as e:
-        _log_substep(f"❌ Errore generale nella navigazione alla pagina successiva: {e}")
+        _log_substep(f"⚠️  Errore nella navigazione: {e}")
         return False
 
 
