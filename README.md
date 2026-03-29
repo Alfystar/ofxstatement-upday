@@ -413,6 +413,26 @@ I contributi sono benvenuti! Per favore apri una issue o una pull request su Git
 - Login automatico migliorato
 - Validazione date
 
+## Sheet cheat per deployment
+
+```bash
+cd "./ofxstatement-upday"
+rm -rf dist build *.egg-info src/*.egg-info
+pipenv sync --dev
+pipenv run pytest -q
+pipenv run python -m build
+pipenv run twine check dist/*
+pipenv run twine upload dist/*
+```
+
+Per aggiornare sui sistemi target:
+
+```bash
+pip install --upgrade ofxstatement-upday
+upday-download --version # per verificare che sia aggiornata
+```
+
+
 ## Autore
 
 Alfystar - alfystar1701@gmail.com
