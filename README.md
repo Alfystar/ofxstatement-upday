@@ -30,21 +30,16 @@ Al momento UpDay non fornisce un sistema di esportazione diretta dei dati tramit
 - **Account UpDay attivo** su day.it (solo per il download da web)
 - **Connessione internet** per il web scraping (solo fase di download)
 
-### **Gestione ChromeDriver (Automatica):**
+### **Gestione del driver browser (Automatica):**
 
-Il comando `upday-download` gestisce automaticamente ChromeDriver con una strategia intelligente:
+Il comando `upday-download` usa **Selenium Manager** (integrato in Selenium) per trovare o scaricare automaticamente il driver compatibile con la versione di Chrome installata.
 
-1. **🔍 Prima priorità**: Cerca ChromeDriver già installato localmente
-   - Homebrew (macOS): `/opt/homebrew/bin/chromedriver` o `/usr/local/bin/chromedriver`
-   - Sistema Linux: `/usr/bin/chromedriver`
-   - PATH di sistema: comando `chromedriver`
+- ✅ **Nessun path manuale** da configurare nel codice
+- ✅ **Cache automatica** del driver per gli avvii successivi
+- ⚠️ **Al primo utilizzo** può servire connessione internet
+- ⚠️ **Firewall aziendali, proxy o policy di sicurezza** possono bloccare il download automatico
 
-2. **🌐 Fallback automatico**: Se ChromeDriver non è trovato localmente, tenta il download automatico
-   - ⚠️ **Richiede connessione internet**
-   - ⚠️ **Può fallire** per restrizioni di sistema, firewall aziendali, o politiche di sicurezza
-   - ✅ **Una volta scaricato**, viene memorizzato in cache per utilizzi futuri
-
-3. **🚨 Se il download automatico fallisce**: Il programma fornisce istruzioni dettagliate per l'installazione manuale
+Se il download automatico fallisce, il programma mostra indicazioni diagnostiche e puoi comunque ricorrere a un'installazione manuale come soluzione di emergenza.
 
 ### **Quando l'installazione automatica può fallire:**
 
@@ -113,7 +108,8 @@ upday-download
 
 **Requisiti per questa fase:**
 - ✅ Connessione internet attiva
-- ✅ Chrome e ChromeDriver funzionanti
+- ✅ Google Chrome funzionante
+- ✅ Selenium Manager in grado di risolvere il driver compatibile
 - ✅ Account UpDay valido
 
 **Output:** Un file CSV con tutte le transazioni estratte
@@ -211,7 +207,9 @@ Puoi modificare questo file manualmente prima della conversione in OFX.
 <details>
 <summary>Clicca per vedere le istruzioni per l'installazione manuale</summary>
 
-Per evitare dipendenze dalla connessione internet durante l'uso:
+Normalmente **non serve** installare ChromeDriver manualmente.
+
+Questa sezione è utile solo come workaround se Selenium Manager non riesce a scaricare o riutilizzare automaticamente il driver corretto.
 
 #### macOS:
 ```bash
@@ -286,9 +284,9 @@ ls -la *.csv
 ofxstatement convert -t upday /path/completo/file.csv output.ofx
 ```
 
-### ChromeDriver non funziona su macOS
+### Il download automatico del driver non funziona su macOS
 
-macOS Gatekeeper può bloccare ChromeDriver. Risolvi con:
+macOS Gatekeeper può bloccare i binari scaricati automaticamente. Se necessario, prova con:
 
 ```bash
 xattr -d com.apple.quarantine $(which chromedriver)
@@ -307,6 +305,89 @@ pip install -e .
 
 </details>
 
+### Test automatici
+
+Il progetto include **3 file di test** che coprono plugin, parser e download/browser setup.
+
+#### `tests/test_sample.py`
+
+Serve come **smoke test end-to-end minimale** del plugin OFX:
+
+- crea un CSV temporaneo di esempio
+- istanzia `UpDayPlugin`
+- verifica che il parsing produca uno statement valido
+- controlla che una transazione di utilizzo venga mappata come `PAYMENT`
+
+È utile quando vuoi verificare rapidamente che il workflow **CSV → parser → statement OFX** sia ancora integro.
+
+#### `tests/test_upday.py`
+
+Copre la logica principale del plugin e del parser:
+
+- creazione di `UpDayPlugin`
+- restituzione corretta del parser da `get_parser`
+- parsing della data utente in `get_date_from_user`
+- gestione di input invalidi seguiti da input validi
+- parsing di una riga CSV di utilizzo in `UpDayParser.parse_record`
+
+È il test più utile quando modifichi la logica di conversione **CSV → OFX** o la validazione delle date.
+
+#### `tests/test_download.py`
+
+Copre la parte introdotta per il download/browser setup:
+
+- sanitizzazione del nome file CSV con `sanitize_filename`
+- avvio del browser tramite `Selenium Manager` usando mock di `webdriver.Chrome`
+- gestione dell'errore fatale quando Selenium non riesce ad avviare Chrome
+
+È il test più importante quando tocchi `src/ofxstatement_upday/download.py` o la logica di inizializzazione del browser.
+
+### Come eseguire i test
+
+Esegui tutta la suite:
+
+```bash
+pipenv run pytest -q
+```
+
+Oppure usa il `Makefile`:
+
+```bash
+make test
+```
+
+Esegui un singolo file di test:
+
+```bash
+pipenv run pytest tests/test_sample.py -q
+pipenv run pytest tests/test_upday.py -q
+pipenv run pytest tests/test_download.py -q
+```
+
+Esegui un singolo test specifico:
+
+```bash
+pipenv run pytest tests/test_download.py::test_setup_browser_uses_selenium_manager -q
+```
+
+### Build e pubblicazione
+
+Per preparare e pubblicare una nuova release su PyPI:
+
+```bash
+rm -rf dist build *.egg-info src/*.egg-info
+pipenv run pytest -q
+pipenv run python -m build
+pipenv run twine check dist/*
+pipenv run twine upload dist/*
+```
+
+Se vuoi pubblicare prima su TestPyPI:
+
+```bash
+pipenv run twine upload --repository testpypi dist/*
+```
+
 ## Licenza
 
 GPLv3 - Vedi il file LICENSE per i dettagli
@@ -317,10 +398,12 @@ I contributi sono benvenuti! Per favore apri una issue o una pull request su Git
 
 ## Changelog
 
-### v1.1.0 (Prossima versione)
+### v1.2.0
 - ✨ **BREAKING CHANGE**: Separazione in 2 comandi distinti
   - `upday-download`: per scaricare i dati da web
   - Plugin ofxstatement: per convertire CSV in OFX
+- ✅ Gestione driver browser demandata a Selenium Manager
+- ✅ Test automatici aggiornati e documentati
 - ✅ Workflow più flessibile e manutenibile
 - ✅ Possibilità di modificare il CSV prima della conversione
 - ✅ Conversione offline senza bisogno di browser

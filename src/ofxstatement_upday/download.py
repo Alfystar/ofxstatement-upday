@@ -14,11 +14,9 @@ from typing import List, Dict, Any
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
 
 
 # ============================================================================
@@ -108,18 +106,8 @@ def get_date_from_user(info: str = "inizio", optional: bool = False) -> str:
 # BROWSER SETUP
 # ============================================================================
 
-def _check_internet_connection() -> bool:
-    """Verifica se c'è connessione internet disponibile"""
-    try:
-        import requests
-        response = requests.get("https://www.google.com", timeout=5)
-        return response.status_code == 200
-    except:
-        return False
-
-
 def setup_browser():
-    """Configura e avvia il browser Chrome con strategie multiple di fallback"""
+    """Configura e avvia Chrome usando Selenium Manager per gestire il driver."""
     _log_section("🚀 Avvio del browser...")
 
     chrome_options = Options()
@@ -163,112 +151,47 @@ def setup_browser():
     chrome_options.add_argument("--enable-logging")
     chrome_options.add_argument("--log-level=1")
 
-    # STRATEGIA 1: Usa ChromeDriver predefinito di sistema (PRIORITÀ MASSIMA - più affidabile)
-    _log_step("🔍 Tentativo 1: Uso ChromeDriver predefinito di sistema")
+    # Selenium Manager (integrato in Selenium 4.6+) risolve automaticamente
+    # il driver compatibile con il browser installato e lo cache-a per usi futuri.
+    _log_step("🔍 Avvio Chrome con Selenium Manager")
     try:
         driver = webdriver.Chrome(options=chrome_options)
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         driver.implicitly_wait(10)
-        _log_substep("🎉 Browser avviato con successo usando ChromeDriver predefinito")
+        _log_substep("🎉 Browser avviato con successo")
+        _log_detail("Selenium Manager ha gestito automaticamente la risoluzione del driver")
         return driver
     except Exception as e:
-        _log_substep(f"❌ ChromeDriver predefinito non funziona: {e}")
+        _log_substep(f"❌ Avvio browser fallito: {e}")
 
-    # STRATEGIA 2: Cerca ChromeDriver già installato nel sistema
-    _log_step("🔍 Tentativo 2: Ricerca ChromeDriver già installato nel sistema")
-    system_chromedriver_paths = [
-        "chromedriver",  # PATH del sistema (prova prima questo)
-        "/opt/homebrew/bin/chromedriver",  # Homebrew Apple Silicon Mac
-        "/usr/local/bin/chromedriver",  # Homebrew Intel Mac
-        "/usr/bin/chromedriver",  # Sistema Linux/Mac
-        ]
-
-    for chromedriver_path in system_chromedriver_paths:
-        try:
-            import shutil
-            # Verifica se il path esiste o è nel PATH
-            if chromedriver_path == "chromedriver":
-                actual_path = shutil.which("chromedriver")
-                if actual_path is None:
-                    continue
-                _log_substep(f"✅ Trovato ChromeDriver nel PATH: {actual_path}")
-            elif not os.path.exists(chromedriver_path):
-                continue
-            else:
-                _log_substep(f"✅ Trovato ChromeDriver in: {chromedriver_path}")
-
-            service = Service(chromedriver_path)
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            driver.implicitly_wait(10)
-            _log_substep("🎉 Browser avviato con successo usando ChromeDriver locale")
-            return driver
-        except Exception as e:
-            _log_substep(f"❌ ChromeDriver {chromedriver_path} non funziona: {e}")
-            continue
-
-    # STRATEGIA 3: WebDriverManager come ULTIMA RISORSA (richiede connessione internet)
-    has_internet = _check_internet_connection()
-    if has_internet:
-        _log_step("🌐 Tentativo 3: ChromeDriver non trovato localmente, provo il download automatico")
-        _log_substep("⚠️  Questa operazione richiede connessione internet e potrebbe fallire per restrizioni di sistema")
-        try:
-            # Configura WebDriverManager per cache locale
-            service = Service(ChromeDriverManager(cache_valid_range=7).install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            driver.implicitly_wait(10)
-            _log_substep("🎉 Browser avviato con successo tramite download automatico")
-            _log_detail("💡 Suggerimento: Per evitare download futuri, installa ChromeDriver localmente")
-            return driver
-        except Exception as e:
-            _log_substep(f"❌ Download automatico fallito: {e}")
-    else:
-        _log_step("🚫 Connessione internet non disponibile - salto il download automatico")
-
-    # Se tutti i tentativi falliscono, fornisci istruzioni dettagliate per l'installazione
-    error_message = """🚨 Impossibile avviare Chrome - ChromeDriver non trovato
+    error_message = """🚨 Impossibile avviare Chrome tramite Selenium Manager
 
 🔧 SOLUZIONI RACCOMANDATE:
 
 📋 REQUISITI:
    • Google Chrome deve essere installato e aggiornato
-   • ChromeDriver deve essere compatibile con la versione di Chrome
+   • Al primo avvio potrebbe servire connessione internet per scaricare il driver
+   • In reti aziendali/proxy restrittivi il download automatico può essere bloccato
 
-🛠️  INSTALLAZIONE ChromeDriver:
+🛠️  VERIFICHE DA FARE:
 
-   macOS (raccomandato):
-   ▶️  brew install chromedriver
-   ▶️  xattr -d com.apple.quarantine $(which chromedriver)
-
-   macOS alternativo:
-   ▶️  Scarica da https://chromedriver.chromium.org
-   ▶️  Estrai in /usr/local/bin/ e rendi eseguibile
-
-   Linux Ubuntu/Debian:
-   ▶️  sudo apt-get install chromium-chromedriver
-
-   Linux altre distro:
-   ▶️  Scarica da https://chromedriver.chromium.org
-   ▶️  Estrai in /usr/bin/ e rendi eseguibile
-
-   Windows:
-   ▶️  Scarica da https://chromedriver.chromium.org
-   ▶️  Aggiungi al PATH di sistema
-
-🔍 VERIFICA INSTALLAZIONE:
-   ▶️  Apri terminale e digita: chromedriver --version
+   1. Verifica che Chrome sia installato e apribile normalmente
+   2. Verifica la connessione internet se è il primo avvio su questa macchina
+   3. Se usi proxy/firewall aziendali, consenti il download dei binari necessari
+   4. Se macOS blocca componenti scaricati, verifica eventuali avvisi di sicurezza
 
 ⚠️  POSSIBILI PROBLEMI:
    • Versione Chrome non compatibile → Aggiorna Chrome
-   • Permessi insufficienti → Usa sudo per installazione
-   • Firewall aziendale → Installazione manuale richiesta
-   • macOS Gatekeeper → Esegui: xattr -d com.apple.quarantine /path/to/chromedriver
+   • Connessione internet assente al primo utilizzo → Riprova quando sei online
+   • Firewall aziendale / proxy → Il download automatico può essere bloccato
+   • Permessi insufficienti nella cache utente → Controlla i permessi della home
+   • macOS Gatekeeper → Potrebbe richiedere conferma per componenti scaricati
 
-💡 DOPO L'INSTALLAZIONE:
-   Il plugin funzionerà offline senza bisogno di connessione internet."""
+💡 DOPO IL PRIMO AVVIO:
+   Il driver viene normalmente mantenuto in cache e i successivi avvii non
+   richiedono un nuovo download, salvo aggiornamenti del browser."""
 
-    _handle_fatal_error(None, error_message, Exception("Tutte le strategie di avvio del browser sono fallite"))
+    _handle_fatal_error(None, error_message, Exception("Avvio di Chrome fallito con Selenium Manager"))
 
 
 # ============================================================================
@@ -1089,7 +1012,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
-    parser.add_argument('--version', action='version', version='%(prog)s 1.1.0')
+    parser.add_argument('--version', action='version', version='%(prog)s 1.2.0')
 
     # Aggiungi descrizione dettagliata all'help
     parser.description = """
@@ -1120,7 +1043,7 @@ ESEMPIO COMPLETO:
 REQUISITI:
 
   • Google Chrome installato e aggiornato
-  • ChromeDriver (installazione automatica o manuale)
+  • Selenium Manager attivo (integrato in Selenium) per gestire automaticamente il driver
   • Connessione internet attiva
   • Account UpDay valido su utilizzatori.day.it
 
